@@ -188,20 +188,22 @@ def satir_parse_et(satir):
     """
     Desteklenen formatlar (TC + OgrNo bitişik, Cep opsiyonel):
 
-    Format A — TC(11) + OgrNo(8) + Cep(10/11) hepsi bitişik (29-30 hane):
-        ELMALI MUSTAFA   42958234984249111345445617338   CAEDBBAC...
-        → TC=42958234984  OgrNo=24911134  Cep=5445617338
+    Format A — TC(11) + OgrNo(8) + Cep(10) bitişik (29 hane):
+      YILMAZ MEHMET  123456789011234567855551112233  CAEDBBAC...
+      → TC=12345678901  OgrNo=12345678  Cep=5551112233
 
     Format B — TC(11) + OgrNo(8) bitişik, Cep yok (19 hane):
-        BAYER EBRAR   46750356028249111 48   AAADBBAB...
-        → TC=46750356028  OgrNo=24911148  Cep=""
+      YILMAZ MEHMET  1234567890112345678 48  AAADBBAB...
+      → TC=46750356028  OgrNo=24911148  Cep=""
 
-    Format C — TC(11) ve OgrNo(8) boşlukla ayrılmış (eski format):
-        ALİ YILMAZ   12345678901   20230001   ABCDABCD
-        → TC=12345678901  OgrNo=20230001  Cep=""
+    Format C — TC ve OgrNo boşlukla ayrılmış (eski format):
+      YILMAZ MEHMET  12345678901  12345678  ABCDABCD
+      → TC=12345678901  OgrNo=12345678  Cep=""
 
     Öğrenci No "C" önekiyle de gelebilir (ÇAP öğrencisi):
-        TC+C+OgrNo bitişik: 12345678901C12345678  veya ayrı
+      → TC+C+OgrNo bitişik: 12345678901C12345678  veya ayrı
+
+
     """
     satir = satir.strip()
     if not satir:
@@ -522,7 +524,7 @@ else:
         "TC":            r["tc"],
         "Cep":           r["cep"] if r["cep"] else "—",
         "Toplam (100)":  r["toplam"],
-    } for r in sonuclar]).head(20)
+    } for r in sonuclar]).head(50)
 
     st.dataframe(
         df_onizleme,
