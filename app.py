@@ -127,11 +127,11 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     border-radius: 999px;
     padding: 0.28rem 0.9rem;
     font-size: 0.75rem;
-    color: #a89ef9;
+    color: var(--text);
     font-weight: 500;
     letter-spacing: 0.01em;
 }
-.hero-credit b { color: #c4bafc; font-weight: 700; }
+.hero-credit b { color: var(--text); font-weight: 700; }
 .hero-badge {
     display: inline-block;
     background: rgba(124,106,247,0.13);
