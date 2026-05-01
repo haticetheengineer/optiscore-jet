@@ -1409,7 +1409,7 @@ if not st.session_state.giris_yapildi:
     _, col_mid, _ = st.columns([1, 2, 1])
     with col_mid:
         hoca_input   = st.text_input("Adınız Soyadınız", placeholder="Öğr. Gör. Ad Soyad")
-        kullanici    = st.text_input("Kullanıcı Adı", placeholder="tekis-jet")
+        kullanici    = st.text_input("Kullanıcı Adı", placeholder="kullanıcı adı")
         sifre_input  = st.text_input("Şifre", type="password", placeholder="••••••••")
         giris_btn    = st.button("Giriş Yap", use_container_width=True)
 
