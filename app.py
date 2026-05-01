@@ -11,6 +11,19 @@ from openpyxl.styles import (
 from openpyxl.utils import get_column_letter
 from openpyxl.formatting.rule import ColorScaleRule, DataBarRule
 
+# ReportLab — PDF oluşturma
+from reportlab.lib.pagesizes import A4
+from reportlab.lib import colors as rl_colors
+from reportlab.lib.units import cm, mm
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+from reportlab.platypus import (
+    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
+    HRFlowable, KeepTogether, PageBreak
+)
+from reportlab.graphics.shapes import Drawing, Rect, String, Line, Group
+from reportlab.graphics import renderPDF
+
 # ── Sayfa ayarları ──────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Optik Notlandırma",
@@ -458,6 +471,354 @@ def soru_analizi_hesapla(sonuclar, anahtar):
             "pct": pct,
         })
     return analiz
+
+
+def pdf_olustur(sonuclar, anahtar, dosya_adi=""):
+    """Analiz raporu PDF'i oluşturur."""
+
+    # ── Renkler ────────────────────────────────────────────────────────────────
+    C_PURPLE   = rl_colors.HexColor("#7c6af7")
+    C_PURPLE_L = rl_colors.HexColor("#ede9fe")
+    C_DARK     = rl_colors.HexColor("#1a1835")
+    C_GREY     = rl_colors.HexColor("#6b6880")
+    C_GREY_L   = rl_colors.HexColor("#f5f4ff")
+    C_GREEN    = rl_colors.HexColor("#059669")
+    C_GREEN_L  = rl_colors.HexColor("#d1fae5")
+    C_RED      = rl_colors.HexColor("#dc2626")
+    C_RED_L    = rl_colors.HexColor("#fee2e2")
+    C_AMBER    = rl_colors.HexColor("#d97706")
+    C_AMBER_L  = rl_colors.HexColor("#fef3c7")
+    C_SKY      = rl_colors.HexColor("#0ea5e9")
+    C_SKY_L    = rl_colors.HexColor("#e0f2fe")
+    C_WHITE    = rl_colors.white
+    C_BORDER   = rl_colors.HexColor("#dddaf0")
+    C_ROW_ALT  = rl_colors.HexColor("#f8f7ff")
+
+    # ── İstatistikler ──────────────────────────────────────────────────────────
+    toplamlar  = [r["toplam"] for r in sonuclar]
+    n          = len(toplamlar)
+    ort        = np.mean(toplamlar)
+    std        = np.std(toplamlar)
+    medyan     = np.median(toplamlar)
+    en_yuksek  = max(toplamlar)
+    en_dusuk   = min(toplamlar)
+    gecenler   = [t for t in toplamlar if t >= 50]
+    gecme_say  = len(gecenler)
+    gecme_pct  = round(gecme_say / n * 100, 1) if n else 0
+    soru_sayisi = len(anahtar)
+    analiz     = soru_analizi_hesapla(sonuclar, anahtar)
+
+    buf = io.BytesIO()
+
+    # ── Stil tanımları ─────────────────────────────────────────────────────────
+    def ps(name, **kw):
+        return ParagraphStyle(name, **kw)
+
+    s_title   = ps("title",   fontName="Helvetica-Bold",   fontSize=22, textColor=C_DARK,   spaceAfter=4,  leading=26)
+    s_sub     = ps("sub",     fontName="Helvetica",        fontSize=10, textColor=C_GREY,   spaceAfter=2)
+    s_credit  = ps("credit",  fontName="Helvetica-BoldOblique", fontSize=9, textColor=C_PURPLE, spaceAfter=0)
+    s_h2      = ps("h2",      fontName="Helvetica-Bold",   fontSize=13, textColor=C_DARK,   spaceBefore=18, spaceAfter=6)
+    s_h3      = ps("h3",      fontName="Helvetica-Bold",   fontSize=10, textColor=C_GREY,   spaceBefore=4,  spaceAfter=4)
+    s_body    = ps("body",    fontName="Helvetica",        fontSize=9,  textColor=C_DARK,   leading=14)
+    s_small   = ps("small",   fontName="Helvetica",        fontSize=8,  textColor=C_GREY)
+    s_tc      = ps("tc",      fontName="Helvetica",        fontSize=9,  textColor=C_DARK,   alignment=TA_CENTER)
+    s_tc_bold = ps("tcb",     fontName="Helvetica-Bold",   fontSize=9,  textColor=C_WHITE,  alignment=TA_CENTER)
+    s_tr      = ps("tr",      fontName="Helvetica",        fontSize=9,  textColor=C_DARK,   alignment=TA_RIGHT)
+
+    # ── Header/Footer ──────────────────────────────────────────────────────────
+    PAGE_W, PAGE_H = A4
+    def on_page(canvas, doc):
+        canvas.saveState()
+        # Üst çizgi
+        canvas.setStrokeColor(C_PURPLE)
+        canvas.setLineWidth(3)
+        canvas.line(2*cm, PAGE_H - 1.2*cm, PAGE_W - 2*cm, PAGE_H - 1.2*cm)
+        # Alt footer
+        canvas.setFont("Helvetica", 7.5)
+        canvas.setFillColor(C_GREY)
+        canvas.drawString(2*cm, 1.2*cm, "Optik Notlandirma Sistemi  |  Ogr. Gor. Hatice Tekis")
+        canvas.drawRightString(PAGE_W - 2*cm, 1.2*cm, f"Sayfa {doc.page}")
+        canvas.restoreState()
+
+    doc = SimpleDocTemplate(
+        buf, pagesize=A4,
+        leftMargin=2*cm, rightMargin=2*cm,
+        topMargin=2*cm, bottomMargin=2*cm,
+        title="Optik Notlandirma Analiz Raporu",
+        author="Ogr. Gor. Hatice Tekis",
+    )
+
+    story = []
+
+    # ══ 1. BAŞLIK SAYFASI ═════════════════════════════════════════════════════
+    story.append(Spacer(1, 0.5*cm))
+    story.append(Paragraph("Optik Notlandirma", s_title))
+    story.append(Paragraph("Analiz Raporu", ps("t2", fontName="Helvetica-Bold", fontSize=16,
+                                                textColor=C_PURPLE, spaceAfter=6)))
+    if dosya_adi:
+        story.append(Paragraph(f"Kaynak: {dosya_adi}", s_sub))
+    story.append(Paragraph(f"Cevap Anahtari: <b>{anahtar}</b>  ({soru_sayisi} soru)", s_sub))
+    story.append(Paragraph("Ogr. Gor. Hatice Tekis", s_credit))
+    story.append(HRFlowable(width="100%", thickness=1.5, color=C_PURPLE,
+                             spaceAfter=16, spaceBefore=10))
+
+    # ══ 2. SINIF İSTATİSTİKLERİ ═══════════════════════════════════════════════
+    story.append(Paragraph("Sinif Istatistikleri", s_h2))
+
+    istat_data = [
+        ["", "Deger", "", ""],
+        ["Toplam Ogrenci",   str(n),               "Gecen (>=50)",    str(gecme_say)],
+        ["Sinif Ortalamasi", f"{ort:.2f}",          "Gecme Orani",     f"%{gecme_pct}"],
+        ["Standart Sapma",   f"{std:.2f}",          "Kalan",           str(n - gecme_say)],
+        ["Medyan Puan",      f"{medyan:.2f}",       "En Yuksek",       f"{en_yuksek:.2f}"],
+        ["Soru Sayisi",      str(soru_sayisi),      "En Dusuk",        f"{en_dusuk:.2f}"],
+    ]
+
+    # 2 sütunlu kart grid yerine düzenli tablo
+    stat_rows = [
+        [Paragraph("<b>Istatistik</b>", s_tc_bold), Paragraph("<b>Deger</b>", s_tc_bold),
+         Paragraph("<b>Istatistik</b>", s_tc_bold), Paragraph("<b>Deger</b>", s_tc_bold)],
+        [Paragraph("Toplam Ogrenci",   s_body), Paragraph(f"<b>{n}</b>",              ps("vb", fontName="Helvetica-Bold", fontSize=11, textColor=C_PURPLE, alignment=TA_CENTER)),
+         Paragraph("Gecen (>=50)",     s_body), Paragraph(f"<b>{gecme_say}</b>",      ps("vb2",fontName="Helvetica-Bold", fontSize=11, textColor=C_GREEN, alignment=TA_CENTER))],
+        [Paragraph("Sinif Ortalamasi", s_body), Paragraph(f"<b>{ort:.2f}</b>",        ps("vb3", fontName="Helvetica-Bold", fontSize=11, textColor=C_PURPLE, alignment=TA_CENTER)),
+         Paragraph("Gecme Orani",      s_body), Paragraph(f"<b>%{gecme_pct}</b>",     ps("vb4", fontName="Helvetica-Bold", fontSize=11, textColor=C_GREEN, alignment=TA_CENTER))],
+        [Paragraph("Standart Sapma",   s_body), Paragraph(f"<b>{std:.2f}</b>",        ps("vb5", fontName="Helvetica-Bold", fontSize=11, textColor=C_SKY, alignment=TA_CENTER)),
+         Paragraph("Kalan",            s_body), Paragraph(f"<b>{n - gecme_say}</b>",  ps("vb6", fontName="Helvetica-Bold", fontSize=11, textColor=C_RED, alignment=TA_CENTER))],
+        [Paragraph("Medyan",           s_body), Paragraph(f"<b>{medyan:.2f}</b>",     ps("vb7", fontName="Helvetica-Bold", fontSize=11, textColor=C_DARK, alignment=TA_CENTER)),
+         Paragraph("En Yuksek",        s_body), Paragraph(f"<b>{en_yuksek:.2f}</b>",  ps("vb8", fontName="Helvetica-Bold", fontSize=11, textColor=C_GREEN, alignment=TA_CENTER))],
+        [Paragraph("Soru Sayisi",      s_body), Paragraph(f"<b>{soru_sayisi}</b>",    ps("vb9", fontName="Helvetica-Bold", fontSize=11, textColor=C_DARK, alignment=TA_CENTER)),
+         Paragraph("En Dusuk",         s_body), Paragraph(f"<b>{en_dusuk:.2f}</b>",   ps("vb10",fontName="Helvetica-Bold", fontSize=11, textColor=C_RED, alignment=TA_CENTER))],
+    ]
+
+    col_w = (PAGE_W - 4*cm) / 4
+    stat_tbl = Table(stat_rows, colWidths=[col_w*1.4, col_w*0.6, col_w*1.4, col_w*0.6])
+    stat_tbl.setStyle(TableStyle([
+        ("BACKGROUND",  (0,0), (-1,0),  C_DARK),
+        ("TEXTCOLOR",   (0,0), (-1,0),  C_WHITE),
+        ("FONTNAME",    (0,0), (-1,0),  "Helvetica-Bold"),
+        ("FONTSIZE",    (0,0), (-1,0),  9),
+        ("ALIGN",       (0,0), (-1,-1), "CENTER"),
+        ("VALIGN",      (0,0), (-1,-1), "MIDDLE"),
+        ("ROWBACKGROUNDS", (0,1), (-1,-1), [C_WHITE, C_ROW_ALT]),
+        ("GRID",        (0,0), (-1,-1), 0.5, C_BORDER),
+        ("ROUNDEDCORNERS", [4]),
+        ("TOPPADDING",  (0,0), (-1,-1), 7),
+        ("BOTTOMPADDING",(0,0),(-1,-1), 7),
+        ("LEFTPADDING", (0,0), (-1,-1), 10),
+        ("RIGHTPADDING",(0,0), (-1,-1), 10),
+    ]))
+    story.append(stat_tbl)
+
+    # ══ 3. GEÇTİ / KALDI ÖZETİ ════════════════════════════════════════════════
+    story.append(Spacer(1, 0.4*cm))
+    story.append(Paragraph("Gecti / Kaldi Ozeti", s_h2))
+
+    gc_data = [
+        [Paragraph("<b>Durum</b>",   s_tc_bold),
+         Paragraph("<b>Sayi</b>",    s_tc_bold),
+         Paragraph("<b>Oran</b>",    s_tc_bold),
+         Paragraph("<b>Puan Esigi</b>", s_tc_bold)],
+        [Paragraph("Gecti", ps("gc", fontName="Helvetica-Bold", fontSize=10, textColor=C_GREEN, alignment=TA_CENTER)),
+         Paragraph(str(gecme_say), ps("gcv", fontName="Helvetica-Bold", fontSize=14, textColor=C_GREEN, alignment=TA_CENTER)),
+         Paragraph(f"%{gecme_pct}", ps("gcr", fontName="Helvetica-Bold", fontSize=12, textColor=C_GREEN, alignment=TA_CENTER)),
+         Paragraph(">= 50", s_tc)],
+        [Paragraph("Kaldi", ps("kl", fontName="Helvetica-Bold", fontSize=10, textColor=C_RED, alignment=TA_CENTER)),
+         Paragraph(str(n - gecme_say), ps("klv", fontName="Helvetica-Bold", fontSize=14, textColor=C_RED, alignment=TA_CENTER)),
+         Paragraph(f"%{round(100 - gecme_pct, 1)}", ps("klr", fontName="Helvetica-Bold", fontSize=12, textColor=C_RED, alignment=TA_CENTER)),
+         Paragraph("< 50", s_tc)],
+    ]
+    tw = PAGE_W - 4*cm
+    gc_tbl = Table(gc_data, colWidths=[tw*0.3, tw*0.2, tw*0.25, tw*0.25])
+    gc_tbl.setStyle(TableStyle([
+        ("BACKGROUND",   (0,0), (-1,0), C_DARK),
+        ("BACKGROUND",   (0,1), (-1,1), C_GREEN_L),
+        ("BACKGROUND",   (0,2), (-1,2), C_RED_L),
+        ("GRID",         (0,0), (-1,-1), 0.5, C_BORDER),
+        ("ALIGN",        (0,0), (-1,-1), "CENTER"),
+        ("VALIGN",       (0,0), (-1,-1), "MIDDLE"),
+        ("TOPPADDING",   (0,0), (-1,-1), 8),
+        ("BOTTOMPADDING",(0,0), (-1,-1), 8),
+    ]))
+    story.append(gc_tbl)
+
+    # ══ 4. PUAN DAĞILIMI ═══════════════════════════════════════════════════════
+    story.append(Paragraph("Puan Dagilimi", s_h2))
+
+    araliklar = [
+        ("0-24",   0,  24,  "#f87171"),
+        ("25-49", 25,  49,  "#fb923c"),
+        ("50-64", 50,  64,  "#fbbf24"),
+        ("65-79", 65,  79,  "#34d399"),
+        ("80-89", 80,  89,  "#22d3ee"),
+        ("90-100",90, 100,  "#7c6af7"),
+    ]
+    cnts = [sum(1 for t in toplamlar if lo <= t <= hi) for _, lo, hi, _ in araliklar]
+    max_cnt = max(cnts) if cnts else 1
+
+    # Grafik çiz (reportlab Drawing)
+    bar_w   = PAGE_W - 4*cm
+    bar_h   = 5.5*cm
+    lbl_w   = 1.5*cm
+    bar_area= bar_w - lbl_w - 1.2*cm
+    row_h   = bar_h / len(araliklar)
+
+    drw = Drawing(bar_w, bar_h)
+    for idx, ((lbl, lo, hi, hex_c), cnt) in enumerate(zip(araliklar, cnts)):
+        y = bar_h - (idx + 1) * row_h + row_h * 0.15
+        fill_w = (cnt / max_cnt) * bar_area if max_cnt else 0
+
+        # Arka plan çubuğu (gri)
+        bg = Rect(lbl_w, y, bar_area, row_h * 0.7,
+                  fillColor=rl_colors.HexColor("#f0effe"), strokeColor=None)
+        drw.add(bg)
+
+        if fill_w > 0:
+            bar = Rect(lbl_w, y, fill_w, row_h * 0.7,
+                       fillColor=rl_colors.HexColor(hex_c), strokeColor=None)
+            drw.add(bar)
+
+            pct_str = f"%{round(cnt/n*100,1)}  ({cnt})" if n else ""
+            lbl_x   = lbl_w + fill_w + 4
+            drw.add(String(lbl_x, y + row_h * 0.22,
+                           pct_str,
+                           fontName="Helvetica", fontSize=7.5,
+                           fillColor=rl_colors.HexColor("#4a4770")))
+
+        drw.add(String(0, y + row_h * 0.22, lbl,
+                       fontName="Helvetica", fontSize=8,
+                       fillColor=rl_colors.HexColor("#6b6880")))
+
+    story.append(drw)
+
+    # ══ 5. SORU ANALİZİ ════════════════════════════════════════════════════════
+    story.append(PageBreak())
+    story.append(Paragraph("Soru Analizi", s_h2))
+    story.append(Paragraph(
+        "Dogru Yapma Orani:  Kolay >= %70  |  Orta %40-69  |  Zor < %40",
+        ps("leg", fontName="Helvetica", fontSize=8, textColor=C_GREY, spaceAfter=8)
+    ))
+
+    # Soru kartlarını tablo olarak düzenle (8 sütun)
+    COLS = 8
+    qa_header = [Paragraph("<b>Soru</b>", s_tc_bold),
+                 Paragraph("<b>Cevap</b>", s_tc_bold),
+                 Paragraph("<b>Dogru</b>", s_tc_bold),
+                 Paragraph("<b>Yanlis</b>", s_tc_bold),
+                 Paragraph("<b>Bos</b>", s_tc_bold),
+                 Paragraph("<b>%Dogru</b>", s_tc_bold),
+                 Paragraph("<b>Zorluk</b>", s_tc_bold),
+                 Paragraph("<b>Durum</b>", s_tc_bold)]
+
+    qa_rows = [qa_header]
+    for a in analiz:
+        if a["pct"] >= 70:
+            zorluk_txt, z_fg, z_bg = "Kolay", C_GREEN, C_GREEN_L
+        elif a["pct"] >= 40:
+            zorluk_txt, z_fg, z_bg = "Orta",  C_AMBER, C_AMBER_L
+        else:
+            zorluk_txt, z_fg, z_bg = "Zor",   C_RED,   C_RED_L
+
+        bar_cells = int(a["pct"] / 10)
+        bar_str   = "█" * bar_cells + "░" * (10 - bar_cells)
+
+        qa_rows.append([
+            Paragraph(f"S{a['soru']}", s_tc),
+            Paragraph(f"<b>{a['anahtar']}</b>", ps("ans", fontName="Helvetica-Bold", fontSize=9, textColor=C_PURPLE, alignment=TA_CENTER)),
+            Paragraph(str(a["dogru"]),  ps("d", fontName="Helvetica-Bold", fontSize=9, textColor=C_GREEN, alignment=TA_CENTER)),
+            Paragraph(str(a["yanlis"]), ps("y", fontName="Helvetica-Bold", fontSize=9, textColor=C_RED,   alignment=TA_CENTER)),
+            Paragraph(str(a["bos"]),    ps("b", fontName="Helvetica",      fontSize=9, textColor=C_GREY,  alignment=TA_CENTER)),
+            Paragraph(f"{a['pct']:.1f}%", ps("p", fontName="Helvetica-Bold", fontSize=9, textColor=z_fg, alignment=TA_CENTER)),
+            Paragraph(zorluk_txt, ps(f"z{a['soru']}", fontName="Helvetica-Bold", fontSize=8.5, textColor=z_fg, alignment=TA_CENTER)),
+            Paragraph(bar_str,    ps("bar", fontName="Courier", fontSize=7, textColor=z_fg, alignment=TA_CENTER)),
+        ])
+
+    tw = PAGE_W - 4*cm
+    qa_tbl = Table(qa_rows, colWidths=[tw*0.08, tw*0.08, tw*0.09, tw*0.09,
+                                        tw*0.08, tw*0.1,  tw*0.1,  tw*0.38])
+    qa_style = [
+        ("BACKGROUND",   (0,0), (-1,0),  C_DARK),
+        ("GRID",         (0,0), (-1,-1), 0.4, C_BORDER),
+        ("ALIGN",        (0,0), (-1,-1), "CENTER"),
+        ("VALIGN",       (0,0), (-1,-1), "MIDDLE"),
+        ("TOPPADDING",   (0,0), (-1,-1), 5),
+        ("BOTTOMPADDING",(0,0), (-1,-1), 5),
+    ]
+    # Zorluk sütununa arka plan rengini satır satır uygula
+    for row_idx, a in enumerate(analiz, start=1):
+        if a["pct"] >= 70:
+            bg = C_GREEN_L
+        elif a["pct"] >= 40:
+            bg = C_AMBER_L
+        else:
+            bg = C_RED_L
+        qa_style.append(("BACKGROUND", (6, row_idx), (7, row_idx), bg))
+        if row_idx % 2 == 0:
+            for col in [0,1,2,3,4,5]:
+                qa_style.append(("BACKGROUND", (col, row_idx), (col, row_idx), C_ROW_ALT))
+    qa_tbl.setStyle(TableStyle(qa_style))
+    story.append(qa_tbl)
+
+    # ══ 6. ÖNİZLEME TABLOSU — TÜM ÖĞRENCİLER ═════════════════════════════════
+    story.append(PageBreak())
+    story.append(Paragraph("Ogrenci Listesi", s_h2))
+
+    def ogr_sort_key(r):
+        ogr = r["ogr_no"]
+        num = re.sub(r'[^0-9]', '', ogr)
+        return (ogr.startswith('C'), int(num) if num else 0)
+
+    sirali = sorted(sonuclar, key=ogr_sort_key)
+
+    stu_header = [
+        Paragraph("<b>#</b>",            s_tc_bold),
+        Paragraph("<b>Ogrenci No</b>",   s_tc_bold),
+        Paragraph("<b>Ad Soyad</b>",     s_tc_bold),
+        Paragraph("<b>Toplam</b>",       s_tc_bold),
+        Paragraph("<b>Durum</b>",        s_tc_bold),
+    ]
+    stu_rows = [stu_header]
+    for idx, r in enumerate(sirali, 1):
+        gecti    = r["toplam"] >= 50
+        durum_fg = C_GREEN if gecti else C_RED
+        durum_bg = C_GREEN_L if gecti else C_RED_L
+        durum_tx = "Gecti" if gecti else "Kaldi"
+        row_bg   = C_WHITE if idx % 2 else C_ROW_ALT
+        stu_rows.append([
+            Paragraph(str(idx), ps(f"rn{idx}", fontName="Helvetica", fontSize=8, textColor=C_PURPLE, alignment=TA_CENTER)),
+            Paragraph(r["ogr_no"],   ps(f"on{idx}", fontName="Helvetica-Bold", fontSize=8.5, textColor=C_DARK, alignment=TA_CENTER)),
+            Paragraph(r["ad_soyad"], ps(f"ad{idx}", fontName="Helvetica",      fontSize=8.5, textColor=C_DARK)),
+            Paragraph(f"<b>{r['toplam']:.2f}</b>", ps(f"tp{idx}", fontName="Helvetica-Bold", fontSize=9,
+                       textColor=durum_fg, alignment=TA_CENTER)),
+            Paragraph(durum_tx, ps(f"dt{idx}", fontName="Helvetica-Bold", fontSize=8,
+                      textColor=durum_fg, alignment=TA_CENTER)),
+        ])
+
+    tw = PAGE_W - 4*cm
+    stu_tbl = Table(stu_rows, colWidths=[tw*0.07, tw*0.18, tw*0.42, tw*0.17, tw*0.16],
+                    repeatRows=1)
+    stu_style = [
+        ("BACKGROUND",   (0,0), (-1,0), C_DARK),
+        ("GRID",         (0,0), (-1,-1), 0.4, C_BORDER),
+        ("ALIGN",        (0,0), (-1,-1), "CENTER"),
+        ("ALIGN",        (2,1), (2,-1),  "LEFT"),
+        ("VALIGN",       (0,0), (-1,-1), "MIDDLE"),
+        ("TOPPADDING",   (0,0), (-1,-1), 5),
+        ("BOTTOMPADDING",(0,0), (-1,-1), 5),
+        ("LEFTPADDING",  (2,1), (2,-1),  6),
+    ]
+    for idx, r in enumerate(sirali, 1):
+        gecti  = r["toplam"] >= 50
+        row_bg = C_WHITE if idx % 2 else C_ROW_ALT
+        for col in [0,1,2,3]:
+            stu_style.append(("BACKGROUND", (col, idx), (col, idx), row_bg))
+        stu_style.append(("BACKGROUND", (4, idx), (4, idx), C_GREEN_L if gecti else C_RED_L))
+    stu_tbl.setStyle(TableStyle(stu_style))
+    story.append(stu_tbl)
+
+    # ── Build ──────────────────────────────────────────────────────────────────
+    doc.build(story, onFirstPage=on_page, onLaterPages=on_page)
+    buf.seek(0)
+    return buf
 
 
 def excel_olustur(sonuclar, anahtar):
