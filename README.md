@@ -2,7 +2,7 @@
 
 > Optical mark reader output processor — auto-grades exams from TXT and exports results to Excel
 
-OptiScore Jet parses raw optical mark reader (OMR) output files, scores each student's answers against an answer key, and produces a clean Excel report — all through a simple web interface powered by Streamlit.
+OptiScore Jet parses raw optical mark reader (OMR) output files, scores each student's answers against an answer key, and produces a clean multi-sheet Excel report — all through a simple web interface powered by Streamlit.
 
 ---
 
@@ -12,10 +12,15 @@ OptiScore Jet parses raw optical mark reader (OMR) output files, scores each stu
 - 🔑 Enter your answer key — score per question is calculated automatically as `100 ÷ question count`
 - 🇹🇷 Full Turkish character support (UTF-8, CP1254, Latin-1 auto-detection)
 - 🎓 Handles both regular student IDs (8 digits) and double-major IDs (`C` + 8 digits)
-- 📊 Instant preview table with progress bars
-- 📥 One-click Excel download with two sheets:
-  - **SONUCLAR** — Student ID + per-question scores (no header row)
-  - **KONTROL** — Student ID + Full Name + Total Score
+- 📱 Automatically extracts phone numbers when present in the OMR data
+- 📊 Instant preview table with progress bars (Student ID · Full Name · TC · Phone · Total)
+- 📥 One-click Excel download with **5 sheets**:
+  - **Proliz Not Girişi** — Student ID + per-question scores (with header)
+  - **Detaylı Liste** — Student ID + Full Name + TC + Phone + Total + per-question scores
+  - **Özet** — Student ID + Full Name + TC + Phone + Total
+  - **Ham TXT** — Row number + raw answer string for every student
+  - **İşlem Özeti** — Answer key, question count, points per question, student count
+- 📈 Question-level analysis with downloadable PDF report
 - ⚠️ Detailed warnings for unparseable rows
 
 ---
@@ -44,18 +49,45 @@ Open [http://localhost:8501](http://localhost:8501) in your browser.
 
 ## 📄 TXT File Format
 
-Each line must follow this structure:
+Each line must follow one of these structures:
+
+### Format A — TC + Student ID + Phone concatenated (29–30 digits)
 
 ```
-FULL NAME    <TC_ID><STUDENT_ID>    ANSWERS
+FULL NAME    <TC(11)><STUDENT_ID(8)><PHONE(10-11)>    ANSWERS
 ```
 
-| Field | Format | Example |
+```
+ELMALI MUSTAFA    42958234984249111345445617338    CAEDBBAC...
+```
+
+### Format B — TC + Student ID concatenated, no phone (19 digits)
+
+```
+FULL NAME    <TC(11)><STUDENT_ID(8)>    ANSWERS
+```
+
+```
+BAYER EBRAR    46750356028249111 48    AAADBBAB...
+```
+
+### Format C — TC and Student ID space-separated (legacy)
+
+```
+FULL NAME    <TC(11)>    <STUDENT_ID(8)>    ANSWERS
+```
+
+```
+ALİ YILMAZ    12345678901    20230001    ABCDABCD
+```
+
+| Field | Format | Notes |
 |---|---|---|
-| Full Name | Variable length, may contain Turkish chars | `YILMAZ MEHMET` |
-| TC ID + Student ID | 19 digits (concatenated) | `1234567890123456789` |
-| Student ID (double-major) | `C` + 8 digits | `C12345678` |
-| Answers | Letters A–E, `0` or space = blank | `ABCDEABCDEABCDEABCDE` |
+| Full Name | Variable length | Turkish characters supported |
+| TC ID | 11 digits | Always the first 11 digits of the numeric block |
+| Student ID | 8 digits or `C` + 8 digits | `C` prefix = double-major (ÇAP) student |
+| Phone | 10–11 digits starting with `05` or `5` | Optional; normalized to `05xxxxxxxxxx` |
+| Answers | Letters A–E, `0` or space = blank | Trailing blanks padded automatically |
 
 ---
 
@@ -64,9 +96,15 @@ FULL NAME    <TC_ID><STUDENT_ID>    ANSWERS
 | Result | Points |
 |---|---|
 | Correct | `100 ÷ question count` |
-| Wrong or blank | `0` |
+| Wrong or blank (`0`) | `0` |
 
 Example: 25-question exam → each correct answer = **4.00 pts** → max score = **100**
+
+---
+
+## 📈 Question Analysis & PDF
+
+After grading, OptiScore Jet generates a per-question breakdown showing correct-answer rates and score distribution across the class. The analysis can be exported as a **PDF report** directly from the interface.
 
 ---
 
