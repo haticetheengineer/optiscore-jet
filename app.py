@@ -1357,7 +1357,7 @@ def _excel_stillendir(wb, sonuclar_sirali, anahtar, df_analiz):
 
 # ── Login Sistemi ────────────────────────────────────────────────────────────
 KULLANICI_ADI = "tekis-jet"
-SIFRE_HASH    = hashlib.sha256("tekis2024".encode()).hexdigest()
+SIFRE_HASH    = hashlib.sha256("tekis2026".encode()).hexdigest()
 
 def sifre_dogrula(sifre):
     return hashlib.sha256(sifre.encode()).hexdigest() == SIFRE_HASH
