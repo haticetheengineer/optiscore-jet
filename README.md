@@ -113,6 +113,8 @@ After grading, OptiScore Jet generates a per-question breakdown showing correct-
 - [Streamlit](https://streamlit.io)
 - [pandas](https://pandas.pydata.org)
 - [openpyxl](https://openpyxl.readthedocs.io)
+- [reportlab](https://www.reportlab.com)
+- [numpy](https://numpy.org)
 
 ---
 
