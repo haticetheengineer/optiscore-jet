@@ -1,29 +1,43 @@
-# ============================================================
-# OPTİK OKUYUCU OTOMATIK NOTLANDIRMA SİSTEMİ
-# Google Colab Uyumlu | Upload Butonlu | Excel Çıktılı
-# ============================================================
+# -*- coding: utf-8 -*-
+"""
+OPTİK OKUYUCU OTOMATİK NOTLANDIRMA SİSTEMİ
+============================================
+Desteklenen TXT Formatları:
+
+  Format A — TC(11) + OgrNo(8) + Cep(10) bitişik (29 hane):
+      YILMAZ MEHMET  123456789011234567855551112233  CAEDBBAC...
+      → TC=12345678901  OgrNo=12345678  Cep=5551112233
+
+  Format B — TC(11) + OgrNo(8) bitişik, Cep yok (19 hane):
+      YILMAZ MEHMET  1234567890112345678 48  AAADBBAB...
+      → TC=46750356028  OgrNo=24911148  Cep=""
+
+  Format C — TC ve OgrNo boşlukla ayrılmış (eski format):
+      YILMAZ MEHMET  12345678901  12345678  ABCDABCD
+      → TC=12345678901  OgrNo=12345678  Cep=""
+
+  ÇAP öğrencilerinde OgrNo başında 'C' harfi olabilir (her formatta).
+"""
 
 import pandas as pd
 import re
 import io
 from google.colab import files
 
-# ============================================================
-# 1. CEVAP ANAHTARI (buraya girin veya aşağıdaki input'u kullanın)
-# ============================================================
 
-CEVAP_ANAHTARI_MANUEL = ""  # Örnek: "ABCDABCDABCD" — boş bırakılırsa input ile sorulur
+# ============================================================
+# 1. CEVAP ANAHTARI
+# ============================================================
 
 def cevap_anahtari_al():
     """Cevap anahtarını kullanıcıdan al."""
-    if CEVAP_ANAHTARI_MANUEL.strip():
-        anahtar = CEVAP_ANAHTARI_MANUEL.strip().upper()
-        print(f"✅ Cevap anahtarı (manuel): {anahtar}")
-        return anahtar
     anahtar = input("📝 Cevap anahtarını girin (örn: ABCDABCD): ").strip().upper()
     if not anahtar:
         raise ValueError("❌ Cevap anahtarı boş olamaz!")
-    print(f"✅ Cevap anahtarı alındı: {anahtar} ({len(anahtar)} soru)")
+    soru_sayisi = len(anahtar)
+    puan = round(100 / soru_sayisi, 4)
+    print(f"✅ Cevap anahtarı alındı: {anahtar}")
+    print(f"   {soru_sayisi} soru × {puan} puan = 100")
     return anahtar
 
 
@@ -41,14 +55,11 @@ def dosya_yukle():
             print(f"⚠️  '{dosya_adi}' bir .txt dosyası değil, atlanıyor.")
             continue
         print(f"✅ Dosya yüklendi: {dosya_adi}")
-        try:
-            metin = icerik.decode("utf-8")
-        except UnicodeDecodeError:
+        for enc in ("utf-8", "cp1254", "latin-1"):
             try:
-                metin = icerik.decode("cp1254")  # Türkçe Windows encoding
+                return dosya_adi, icerik.decode(enc)
             except UnicodeDecodeError:
-                metin = icerik.decode("latin-1")
-        return dosya_adi, metin
+                continue
 
     raise FileNotFoundError("❌ Geçerli bir .txt dosyası yüklenmedi.")
 
@@ -57,71 +68,90 @@ def dosya_yukle():
 # 3. SATIR PARSE FONKSİYONU
 # ============================================================
 
-# ============================================================
-# 3. SATIR PARSE FONKSİYONU
-# ============================================================
-
 def satir_parse_et(satir, satir_no):
     """
-    TC ve öğrenci no bazen bitişik gelir:
-      1234567890112345678 → TC=12345678901  OgrNo=12345678  (19 hane)
-    Ayrı gelen format da desteklenir:
-      12345678901  12345678  (boşlukla ayrılmış)
-    ÇAP: C + 19 hane veya C + 8 hane
+    Tek satırı parse eder.
+    Başarılıysa dict döner, başarısızsa None döner ve uyarı basar.
     """
     satir = satir.strip()
     if not satir:
         return None
 
-    # Sayısal bloğu bul — TC+OgrNo bitişik olabilir (19 hane) veya ayrı (11+8)
-    blok_match = re.search(r'(C?\d{11,20})', satir, re.IGNORECASE)
+    # ── Sayısal bloğu bul (C öneki dahil) ─────────────────────────────────
+    blok_match = re.search(r'(C?\d{11,30})', satir, re.IGNORECASE)
     if not blok_match:
         print(f"⚠️  Satır {satir_no}: Sayısal blok bulunamadı → '{satir[:60]}'")
         return None
 
-    blok      = blok_match.group(1)
-    blok_end  = blok_match.end()
-    ad_soyad  = satir[:blok_match.start()].strip()
-
+    ad_soyad = satir[:blok_match.start()].strip()
     if not ad_soyad:
         print(f"⚠️  Satır {satir_no}: Ad Soyad bulunamadı.")
         return None
 
-    cap       = blok.upper().startswith('C')
-    rakamlar  = blok[1:] if cap else blok   # sadece rakam kısmı
+    blok     = blok_match.group(1)
+    blok_end = blok_match.end()
+
+    cap      = blok.upper().startswith('C')
+    rakamlar = blok[1:] if cap else blok   # saf rakam kısmı
+
+    tc = ogr_no = cep = ""
 
     if len(rakamlar) >= 19:
-        # Bitişik: ilk 11 = TC, 11-19 = öğrenci no (8 hane)
+        # ── Format A / B: TC(11) + OgrNo(8) [+ Cep(10-11)] bitişik ──────────
         tc           = rakamlar[:11]
         ogr_no_rakam = rakamlar[11:19]
+        kalan_rakam  = rakamlar[19:]      # varsa cep numarası
+
+        # Cep: 05xxxxxxxxx (11 hane) veya 5xxxxxxxxx (10 hane)
+        if re.match(r'^(05\d{9}|5\d{9})$', kalan_rakam):
+            cep = kalan_rakam if kalan_rakam.startswith('0') else '0' + kalan_rakam
+        # Başka uzunluktaki kalıntılar cep değil — yok say
+
+        ogr_no = ('C' if cap else '') + ogr_no_rakam
 
     elif len(rakamlar) == 11:
-        # Sadece TC, öğrenci no ayrı boşlukla geliyor
-        tc = rakamlar
+        # ── Format C: TC ayrı, öğrenci no sonraki blokta ─────────────────────
+        tc           = rakamlar
         kalan_sonra  = satir[blok_end:].strip()
-        ogr_no_match = re.match(r'^(C?\d{8})', kalan_sonra, re.IGNORECASE)
-        if not ogr_no_match:
+
+        ogr_match = re.match(r'^(C?\d{8})', kalan_sonra, re.IGNORECASE)
+        if not ogr_match:
             print(f"⚠️  Satır {satir_no}: Öğrenci no bulunamadı → '{kalan_sonra[:30]}'")
             return None
-        ogr_blok     = ogr_no_match.group(1).upper()
-        cap          = ogr_blok.startswith('C')
-        ogr_no_rakam = ogr_blok[1:] if cap else ogr_blok
-        blok_end    += ogr_no_match.end()
+
+        ogr_no   = ogr_match.group(1).upper()   # C dahil olduğu gibi sakla
+        blok_end += ogr_match.end()
+
+        # Cep: öğrenci no'dan sonra gelen 05xx / 5xx bloğu (varsa)
+        kalan2    = satir[blok_end:].strip()
+        cep_match = re.match(r'^(05\d{9}|5\d{9})', kalan2)
+        if cep_match:
+            c   = cep_match.group(1)
+            cep = c if c.startswith('0') else '0' + c
+            blok_end += cep_match.end()
 
     else:
-        print(f"⚠️  Satır {satir_no}: Sayısal blok uzunluğu beklenmedik ({len(rakamlar)}) → '{blok}'")
+        print(f"⚠️  Satır {satir_no}: Sayısal blok uzunluğu beklenmedik "
+              f"({len(rakamlar)} hane) → '{blok}'")
         return None
 
-    ogr_no   = ('C' if cap else '') + ogr_no_rakam
+    # ── Cevaplar: kalan metinden A-E ve 0 dışı karakterleri temizle ────────
     kalan    = satir[blok_end:].strip()
+    kalan    = re.sub(r'\b\d{5,}\b', '', kalan)   # artık rakam kalıntılarını sil
     cevaplar = re.sub(r'[^A-Ea-e0 ]', '', kalan).replace(' ', '0').upper()
 
     if not cevaplar:
         print(f"⚠️  Satır {satir_no}: Cevaplar bulunamadı.")
         return None
 
-    return {"ad_soyad": ad_soyad, "tc": tc, "ogr_no": ogr_no, "cevaplar": cevaplar}
-    return {"ad_soyad": ad_soyad, "tc": tc, "ogr_no": ogr_no, "cevaplar": cevaplar}
+    return {
+        "ad_soyad": ad_soyad,
+        "tc":       tc,
+        "ogr_no":   ogr_no,
+        "cevaplar": cevaplar,
+        "cep":      cep,
+    }
+
 
 # ============================================================
 # 4. NOTLANDIRMA FONKSİYONU
@@ -129,25 +159,20 @@ def satir_parse_et(satir, satir_no):
 
 def ogrenci_puanla(cevaplar, anahtar, satir_no):
     """
-    Her soruyu karşılaştırır.
-    Doğru → 4 puan, Yanlış/Boş → 0 puan
-
-    Returns:
-        list[int] — her soru için puan
+    Doğru → 100 / soru_sayısı puan
+    Yanlış / Boş ('0') → 0 puan
     """
+    puan = round(100 / len(anahtar), 4)
+
     if len(cevaplar) != len(anahtar):
         print(f"⚠️  Satır {satir_no}: Cevap sayısı ({len(cevaplar)}) ≠ "
               f"anahtar sayısı ({len(anahtar)}) → padding/kesme uygulanıyor.")
-        # Kısa olanı 0 ile doldur
         cevaplar = cevaplar.ljust(len(anahtar), '0')[:len(anahtar)]
 
-    puanlar = []
-    for i, (ogr_cevap, dogru_cevap) in enumerate(zip(cevaplar, anahtar)):
-        if ogr_cevap in ('0', ' ', '') or ogr_cevap != dogru_cevap:
-            puanlar.append(0)
-        else:
-            puanlar.append(4)
-    return puanlar
+    return [
+        puan if (ogr_c not in ('0', ' ', '') and ogr_c == dogru_c) else 0
+        for ogr_c, dogru_c in zip(cevaplar, anahtar)
+    ]
 
 
 # ============================================================
@@ -159,13 +184,13 @@ def isle(metin, anahtar):
     satirlar = metin.splitlines()
     print(f"\n📋 Toplam {len(satirlar)} satır işlenecek...\n")
 
-    sonuclar = []
+    sonuclar   = []
     hata_sayisi = 0
 
     for i, satir in enumerate(satirlar, start=1):
         veri = satir_parse_et(satir, i)
         if veri is None:
-            if satir.strip():  # boş satır değilse say
+            if satir.strip():
                 hata_sayisi += 1
             continue
 
@@ -175,11 +200,18 @@ def isle(metin, anahtar):
         for s_no, puan in enumerate(puanlar, start=1):
             kayit[f"S{s_no}"] = puan
 
-        sonuclar.append({**kayit, "_toplam": sum(puanlar), "_ad_soyad": veri["ad_soyad"]})
+        sonuclar.append({
+            **kayit,
+            "toplam":   round(sum(puanlar), 2),
+            "ad_soyad": veri["ad_soyad"],
+            "tc":       veri["tc"],
+            "cep":      veri["cep"],
+            "cevaplar": veri["cevaplar"],
+        })
 
-    print(f"✅ {len(sonuclar)} öğrenci başarıyla işlendi.")
+    print(f"\n✅ {len(sonuclar)} öğrenci başarıyla işlendi.")
     if hata_sayisi:
-        print(f"⚠️  {hata_sayisi} satırda hata oluştu (yukarıdaki uyarılara bakın).")
+        print(f"⚠️  {hata_sayisi} satırda hata oluştu.")
 
     return sonuclar
 
@@ -189,71 +221,99 @@ def isle(metin, anahtar):
 # ============================================================
 
 def excel_olustur(sonuclar, anahtar):
-    """
-    İki sheet içeren Excel dosyası oluşturur:
-    - Sheet 1: Öğrenci No + her soru puanı (başlık YOK)
-    - Sheet 2: KONTROL — Öğrenci No + Toplam Puan
-    """
-    if not sonuclar:
-        raise ValueError("❌ Hiç öğrenci verisi işlenemedi, Excel oluşturulamıyor.")
+    soru_sayisi    = len(anahtar)
+    puan_per_s     = round(100 / soru_sayisi, 4)
+    soru_kolonlari = [f"S{i}" for i in range(1, soru_sayisi + 1)]
+    soru_baslik    = [f"Soru {i} Puanı" for i in range(1, soru_sayisi + 1)]
 
-    # Sheet 1: başlıksız puan tablosu
-    soru_sayisi = len(anahtar)
-    ana_kolonlar = ["ogr_no"] + [f"S{i}" for i in range(1, soru_sayisi + 1)]
+    # ── Sheet 1: Proliz Not Girişi ─────────────────────────────────────────
+    # OgrNo | Soru 1 Puanı | ... | Soru N Puanı  (başlıklı)
+    df_proliz = pd.DataFrame(sonuclar)[["ogr_no"] + soru_kolonlari].copy()
+    df_proliz.columns = ["Öğrenci Numarası"] + soru_baslik
 
-    df_ana = pd.DataFrame(sonuclar)[ana_kolonlar]
+    # ── Sheet 2: Detaylı Liste ─────────────────────────────────────────────
+    df_detay = pd.DataFrame([{
+        "Öğrenci Numarası": r["ogr_no"],
+        "Adı Soyadı":       r["ad_soyad"],
+        "TC No":            r.get("tc", ""),
+        "Cep Telefonu":     r.get("cep", ""),
+        "Toplam Puan":      r["toplam"],
+        **{f"Soru {i} Puanı": r[f"S{i}"] for i in range(1, soru_sayisi + 1)},
+    } for r in sonuclar])
 
-    # Sheet 2: kontrol
-    df_kontrol = pd.DataFrame([
-        {"Ogrenci No": r["ogr_no"], "Toplam Puan": r["_toplam"]}
-        for r in sonuclar
+    # ── Sheet 3: Özet ──────────────────────────────────────────────────────
+    df_ozet = pd.DataFrame([{
+        "Öğrenci Numarası": r["ogr_no"],
+        "Adı Soyadı":       r["ad_soyad"],
+        "TC No":            r.get("tc", ""),
+        "Cep Telefonu":     r.get("cep", ""),
+        "Toplam Puan":      r["toplam"],
+    } for r in sonuclar])
+
+    # ── Sheet 4: Ham TXT ───────────────────────────────────────────────────
+    df_ham = pd.DataFrame([{
+        "Satır No":         i + 1,
+        "Öğrenci Numarası": r["ogr_no"],
+        "Adı Soyadı":       r["ad_soyad"],
+        "TC No":            r.get("tc", ""),
+        "Cep Telefonu":     r.get("cep", ""),
+        "Ham Cevaplar":     r.get("cevaplar", ""),
+    } for i, r in enumerate(sonuclar)])
+
+    # ── Sheet 5: İşlem Özeti ───────────────────────────────────────────────
+    df_islem = pd.DataFrame([
+        {"Bilgi": "Soru Sayısı",             "Değer": soru_sayisi},
+        {"Bilgi": "Soru Başına Puan",        "Değer": puan_per_s},
+        {"Bilgi": "İşlenen Öğrenci Sayısı", "Değer": len(sonuclar)},
+        {"Bilgi": "Cevap Anahtarı",          "Değer": anahtar},
     ])
 
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        # Sheet 1: başlık satırı YOK (header=False)
-        df_ana.to_excel(writer, sheet_name="SONUCLAR", index=False, header=False)
-        # Sheet 2: başlık VAR
-        df_kontrol.to_excel(writer, sheet_name="KONTROL", index=False)
-
-    output.seek(0)
-    return output
+    buf = io.BytesIO()
+    with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+        df_proliz.to_excel(writer, sheet_name="Proliz Not Girişi", index=False)
+        df_detay.to_excel(writer,  sheet_name="Detaylı Liste",      index=False)
+        df_ozet.to_excel(writer,   sheet_name="Özet",               index=False)
+        df_ham.to_excel(writer,    sheet_name="Ham TXT",             index=False)
+        df_islem.to_excel(writer,  sheet_name="İşlem Özeti",         index=False)
+    buf.seek(0)
+    return buf
 
 
 # ============================================================
-# 7. MAIN — HER ŞEYİ BİR ARADA ÇALIŞTIR
+# 7. MAIN
 # ============================================================
 
 def main():
     print("=" * 55)
-    print("  OPTİK OKUYUCU OTOMATIK NOTLANDIRMA SİSTEMİ")
+    print("  OPTİK OKUYUCU OTOMATİK NOTLANDIRMA SİSTEMİ")
     print("=" * 55)
 
-    # Adım 1: Cevap anahtarı
-    anahtar = cevap_anahtari_al()
-
-    # Adım 2: Dosya yükle
+    anahtar          = cevap_anahtari_al()
     dosya_adi, metin = dosya_yukle()
+    sonuclar         = isle(metin, anahtar)
 
-    # Adım 3: İşle
-    sonuclar = isle(metin, anahtar)
+    if not sonuclar:
+        print("❌ Hiç öğrenci verisi işlenemedi. Dosya formatını kontrol edin.")
+        return
 
-    # Adım 4: Excel oluştur
     print("\n📊 Excel dosyası oluşturuluyor...")
     excel_buffer = excel_olustur(sonuclar, anahtar)
 
-    # Adım 5: İndir
     cikti_adi = dosya_adi.rsplit(".", 1)[0] + ".xlsx"
     with open(cikti_adi, "wb") as f:
         f.write(excel_buffer.read())
 
-    print(f"✅ Excel hazır: {cikti_adi}")
-    print(f"   • SONUCLAR sheet: {len(sonuclar)} öğrenci, {len(anahtar)} soru")
-    print(f"   • KONTROL sheet : Öğrenci No + Toplam Puan")
+    cepli = sum(1 for r in sonuclar if r.get("cep"))
+    print(f"\n✅ Excel hazır: {cikti_adi}")
+    print(f"   • Proliz Not Girişi : {len(sonuclar)} öğrenci, {len(anahtar)} soru")
+    print(f"   • Detaylı Liste     : TC + Cep dahil")
+    print(f"   • Özet              : {len(sonuclar)} öğrenci")
+    print(f"   • Ham TXT           : ham cevap dizileri")
+    print(f"   • İşlem Özeti       : anahtar & puan bilgisi")
+    print(f"   • Cep tespit edilen : {cepli} öğrenci")
     print("\n⬇️  İndirme başlıyor...")
     files.download(cikti_adi)
     print("🎉 Tamamlandı!")
 
 
-# Çalıştır
 main()
