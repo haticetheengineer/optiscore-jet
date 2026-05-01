@@ -795,7 +795,7 @@ if not isle_btn:
             <div style="font-size:0.7rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#6b6880;margin-bottom:0.9rem;">📌 Format Beklentisi</div>
             <div style="font-family:'JetBrains Mono',monospace;font-size:0.78rem;color:#5a5870;line-height:2.1;">
                 <span style="color:#7c6af7;font-weight:700;">Format A</span> — TC+OgrNo+Cep (29-30 hane)<br>
-                <span style="color:#4b4870;">YILMAZ MEHMET</span> <span style="color:#e2e0f0;">12345678901<b>12345678</b><span style="color:#34d399;">5445617338</span></span> CAED…<br><br>
+                <span style="color:#4b4870;">YILMAZ MEHMET</span> <span style="color:#e2e0f0;">12345678901<b>12345678</b><span style="color:#34d399;">5554443322</span></span> CAED…<br><br>
                 <span style="color:#7c6af7;font-weight:700;">Format B</span> — TC+OgrNo (19 hane)<br>
                 <span style="color:#4b4870;">YILMAZ MEHMET</span> <span style="color:#e2e0f0;">1234567890112345678</span> AAAD…<br><br>
                 <span style="color:#7c6af7;font-weight:700;">Format C</span> — Boşlukla ayrılmış<br>
