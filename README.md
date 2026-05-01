@@ -98,8 +98,8 @@ ALİ YILMAZ    12345678901    12345678    ABCDEABCDE...
 | Correct | `100 ÷ question count` |
 | Wrong or blank (`0`) | `0` |
 
-Question count is inferred from the length of the answer key — no separate input needed
-Example: 25-question exam → each correct answer = **4.00 pts** → max score = **100**
+- Question count is inferred from the length of the answer key — no separate input needed
+- Example: 25-question exam → each correct answer = **4.00 pts** → max score = **100**
 
 ---
 
