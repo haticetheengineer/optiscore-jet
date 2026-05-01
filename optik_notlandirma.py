@@ -64,9 +64,9 @@ def dosya_yukle():
 def satir_parse_et(satir, satir_no):
     """
     TC ve öğrenci no bazen bitişik gelir:
-      4462926175624911143 → TC=44629261756  OgrNo=24911143  (19 hane)
+      1234567890112345678 → TC=12345678901  OgrNo=12345678  (19 hane)
     Ayrı gelen format da desteklenir:
-      44629261756  24911143  (boşlukla ayrılmış)
+      12345678901  12345678  (boşlukla ayrılmış)
     ÇAP: C + 19 hane veya C + 8 hane
     """
     satir = satir.strip()
