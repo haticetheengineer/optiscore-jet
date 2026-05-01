@@ -58,7 +58,7 @@ FULL NAME    <TC(11)><STUDENT_ID(8)><PHONE(10-11)>    ANSWERS
 ```
 
 ```
-ELMALI MUSTAFA    42958234984249111345445617338    CAEDBBAC...
+ALİ YILMAZ    12345678901123456785554443311    ABCDEABCDE...
 ```
 
 ### Format B — TC + Student ID concatenated, no phone (19 digits)
@@ -68,7 +68,7 @@ FULL NAME    <TC(11)><STUDENT_ID(8)>    ANSWERS
 ```
 
 ```
-BAYER EBRAR    46750356028249111 48    AAADBBAB...
+ALİ YILMAZ    1234567890112345678 48    ABCDEABCDE...
 ```
 
 ### Format C — TC and Student ID space-separated (legacy)
@@ -78,7 +78,7 @@ FULL NAME    <TC(11)>    <STUDENT_ID(8)>    ANSWERS
 ```
 
 ```
-ALİ YILMAZ    12345678901    20230001    ABCDABCD
+ALİ YILMAZ    12345678901    20230001    ABCDEABCDE...
 ```
 
 | Field | Format | Notes |
