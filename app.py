@@ -242,6 +242,26 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 .dist-cnt { font-size: 0.73rem; color: #6b6880; width: 30px; }
 
 hr { border-color: #1e1d2e !important; }
+
+/* Streamlit varsayılan beyaz arka planları sıfırla */
+[data-testid="stVerticalBlock"],
+[data-testid="stHorizontalBlock"],
+[data-testid="column"],
+[data-testid="stColumn"],
+[data-testid="block-container"],
+.element-container,
+.stMarkdown,
+section[data-testid="stSidebar"] > div,
+div[data-testid="stDecoration"] { background: transparent !important; }
+
+/* Streamlit üst dekorasyon çizgisini gizle */
+[data-testid="stDecoration"] { display: none !important; }
+
+/* Üst beyaz header/toolbar alanını gizle */
+header[data-testid="stHeader"] {
+    background: transparent !important;
+    border-bottom: none !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
