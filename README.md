@@ -68,7 +68,7 @@ FULL NAME    <TC(11)><STUDENT_ID(8)>    ANSWERS
 ```
 
 ```
-ALİ YILMAZ    1234567890112345678 48    ABCDEABCDE...
+ALİ YILMAZ    1234567890112345678    ABCDEABCDE...
 ```
 
 ### Format C — TC and Student ID space-separated (legacy)
@@ -78,7 +78,7 @@ FULL NAME    <TC(11)>    <STUDENT_ID(8)>    ANSWERS
 ```
 
 ```
-ALİ YILMAZ    12345678901    20230001    ABCDEABCDE...
+ALİ YILMAZ    12345678901    12345678    ABCDEABCDE...
 ```
 
 | Field | Format | Notes |
