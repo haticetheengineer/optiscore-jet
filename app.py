@@ -24,19 +24,70 @@ st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
+/* ══ CSS DEĞIŞKENLERI — DARK (varsayılan) ══ */
+:root {
+    --bg:          #0d0d14;
+    --bg2:         #12111c;
+    --bg3:         #1a1927;
+    --border:      #1e1d2e;
+    --border2:     #2a2840;
+    --text:        #e2e0f0;
+    --text2:       #a09eb8;
+    --text3:       #6b6880;
+    --text4:       #4a4860;
+    --sidebar-bg1: #12111c;
+    --sidebar-bg2: #0f0f1a;
+    --hero-bg1:    #13111f;
+    --hero-bg2:    #0f1520;
+    --input-bg:    #12111c;
+    --input-text:  #e2e0f0;
+    --bar-bg:      #1a1927;
+    --card-info-bg:#12111c;
+    --mc-val:      #ffffff;
+    --dist-fill:   rgba(255,255,255,0.9);
+}
+
+/* ══ LIGHT MODE — sistem tercihine göre ══ */
+@media (prefers-color-scheme: light) {
+    :root {
+        --bg:          #f5f4ff;
+        --bg2:         #ffffff;
+        --bg3:         #ededf8;
+        --border:      #dddaf0;
+        --border2:     #c8c4e8;
+        --text:        #1a1835;
+        --text2:       #4a4770;
+        --text3:       #7a789a;
+        --text4:       #a0a0b8;
+        --sidebar-bg1: #f0effe;
+        --sidebar-bg2: #ebe9fc;
+        --hero-bg1:    #eeeaff;
+        --hero-bg2:    #e8f0ff;
+        --input-bg:    #ffffff;
+        --input-text:  #1a1835;
+        --bar-bg:      #e8e6f8;
+        --card-info-bg:#ffffff;
+        --mc-val:      #1a1835;
+        --dist-fill:   rgba(0,0,0,0.75);
+    }
+}
+
 html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 
-.stApp { background: #0d0d14; color: #e2e0f0; }
+.stApp {
+    background: var(--bg) !important;
+    color: var(--text) !important;
+}
 
 [data-testid="stSidebar"] {
-    background: linear-gradient(180deg, #12111c 0%, #0f0f1a 100%) !important;
-    border-right: 1px solid #1e1d2e;
+    background: linear-gradient(180deg, var(--sidebar-bg1) 0%, var(--sidebar-bg2) 100%) !important;
+    border-right: 1px solid var(--border) !important;
 }
 
 /* Hero */
 .hero-wrap {
-    background: linear-gradient(135deg, #13111f 0%, #0f1520 100%);
-    border: 1px solid #1e1d2e;
+    background: linear-gradient(135deg, var(--hero-bg1) 0%, var(--hero-bg2) 100%);
+    border: 1px solid var(--border);
     border-radius: 16px;
     padding: 2.2rem 2.5rem;
     margin-bottom: 1.8rem;
@@ -48,28 +99,43 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     position: absolute;
     top: -60px; right: -60px;
     width: 220px; height: 220px;
-    background: radial-gradient(circle, rgba(124,106,247,0.15) 0%, transparent 70%);
+    background: radial-gradient(circle, rgba(124,106,247,0.18) 0%, transparent 70%);
     pointer-events: none;
 }
 .hero-title {
     font-size: 2.0rem;
     font-weight: 700;
     letter-spacing: -0.04em;
-    color: #fff;
+    color: var(--text);
     margin: 0;
     line-height: 1.1;
 }
 .hero-title span { color: #7c6af7; }
 .hero-sub {
-    color: #6b6880;
+    color: var(--text3);
     font-size: 0.9rem;
     margin-top: 0.4rem;
     font-weight: 400;
 }
+.hero-credit {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-top: 1.1rem;
+    background: rgba(124,106,247,0.09);
+    border: 1px solid rgba(124,106,247,0.22);
+    border-radius: 999px;
+    padding: 0.28rem 0.9rem;
+    font-size: 0.75rem;
+    color: #a89ef9;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+}
+.hero-credit b { color: #c4bafc; font-weight: 700; }
 .hero-badge {
     display: inline-block;
-    background: rgba(124,106,247,0.15);
-    border: 1px solid rgba(124,106,247,0.3);
+    background: rgba(124,106,247,0.13);
+    border: 1px solid rgba(124,106,247,0.28);
     color: #a89ef9;
     border-radius: 999px;
     padding: 0.18rem 0.75rem;
@@ -89,8 +155,8 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     margin: 1.4rem 0;
 }
 .mc {
-    background: #12111c;
-    border: 1px solid #1e1d2e;
+    background: var(--bg2);
+    border: 1px solid var(--border);
     border-radius: 12px;
     padding: 1.1rem 1.3rem;
     position: relative;
@@ -107,9 +173,9 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 .mc.amber::after  { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
 .mc.rose::after   { background: linear-gradient(90deg, #f43f5e, #fb7185); }
 .mc.sky::after    { background: linear-gradient(90deg, #0ea5e9, #38bdf8); }
-.mc-label { font-size: 0.7rem; color: #6b6880; text-transform: uppercase; letter-spacing: 0.09em; font-weight: 600; }
-.mc-val   { font-family: 'JetBrains Mono', monospace; font-size: 1.9rem; font-weight: 500; color: #fff; margin-top: 0.15rem; line-height: 1; }
-.mc-sub   { font-size: 0.72rem; color: #5a5870; margin-top: 0.25rem; }
+.mc-label { font-size: 0.7rem; color: var(--text3); text-transform: uppercase; letter-spacing: 0.09em; font-weight: 600; }
+.mc-val   { font-family: 'JetBrains Mono', monospace; font-size: 1.9rem; font-weight: 500; color: var(--mc-val); margin-top: 0.15rem; line-height: 1; }
+.mc-sub   { font-size: 0.72rem; color: var(--text4); margin-top: 0.25rem; }
 
 /* Section headers */
 .sec-head {
@@ -117,7 +183,7 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     font-weight: 600;
     letter-spacing: 0.1em;
     text-transform: uppercase;
-    color: #6b6880;
+    color: var(--text3);
     margin: 1.8rem 0 0.8rem 0;
     display: flex;
     align-items: center;
@@ -127,7 +193,7 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     content: '';
     flex: 1;
     height: 1px;
-    background: #1e1d2e;
+    background: var(--border);
 }
 
 /* Soru analizi kartları */
@@ -138,20 +204,19 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     margin: 0.8rem 0;
 }
 .qa-card {
-    background: #12111c;
-    border: 1px solid #1e1d2e;
+    background: var(--bg2);
+    border: 1px solid var(--border);
     border-radius: 10px;
     padding: 0.65rem 0.5rem;
     text-align: center;
-    position: relative;
 }
-.qa-card .q-no  { font-size: 0.65rem; color: #6b6880; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+.qa-card .q-no  { font-size: 0.65rem; color: var(--text3); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
 .qa-card .q-pct { font-family: 'JetBrains Mono', monospace; font-size: 1.1rem; font-weight: 600; margin-top: 0.1rem; }
-.qa-card .q-ans { font-size: 0.7rem; color: #6b6880; margin-top: 0.15rem; }
+.qa-card .q-ans { font-size: 0.7rem; color: var(--text3); margin-top: 0.15rem; }
 .qa-card.easy   { border-color: rgba(52,211,153,0.4); }
 .qa-card.easy .q-pct { color: #34d399; }
 .qa-card.mid    { border-color: rgba(251,191,36,0.3); }
-.qa-card.mid .q-pct  { color: #fbbf24; }
+.qa-card.mid .q-pct  { color: #f59e0b; }
 .qa-card.hard   { border-color: rgba(248,113,113,0.4); }
 .qa-card.hard .q-pct { color: #f87171; }
 
@@ -173,7 +238,7 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     padding: 0.6rem 1rem;
     border-radius: 0 8px 8px 0;
     font-size: 0.82rem;
-    color: #fbbf24;
+    color: #d97706;
     margin: 0.25rem 0;
     font-family: 'JetBrains Mono', monospace;
 }
@@ -183,9 +248,22 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     padding: 0.7rem 1.1rem;
     border-radius: 0 8px 8px 0;
     font-size: 0.85rem;
-    color: #34d399;
+    color: #059669;
     margin: 0.5rem 0;
 }
+
+/* Footer */
+.footer-bar {
+    margin-top: 3rem;
+    padding: 1.2rem 0 0.5rem 0;
+    border-top: 1px solid var(--border);
+    text-align: center;
+    font-size: 0.75rem;
+    color: var(--text4);
+    line-height: 1.8;
+}
+.footer-bar b { color: var(--text3); font-weight: 600; }
+.footer-bar a { color: #7c6af7; text-decoration: none; }
 
 /* Butonlar */
 .stButton > button {
@@ -208,7 +286,7 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 [data-testid="stDownloadButton"] > button {
     background: rgba(52,211,153,0.1) !important;
     border: 1px solid rgba(52,211,153,0.4) !important;
-    color: #34d399 !important;
+    color: #059669 !important;
     border-radius: 9px !important;
     font-family: 'Inter', sans-serif !important;
     font-weight: 600 !important;
@@ -219,9 +297,9 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     box-shadow: 0 4px 16px rgba(52,211,153,0.2) !important;
 }
 .stTextInput > div > div > input {
-    background: #12111c !important;
-    border: 1px solid #1e1d2e !important;
-    color: #e2e0f0 !important;
+    background: var(--input-bg) !important;
+    border: 1px solid var(--border) !important;
+    color: var(--input-text) !important;
     font-family: 'JetBrains Mono', monospace !important;
     border-radius: 8px !important;
     font-size: 1rem !important;
@@ -235,15 +313,15 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 /* Dağılım bar */
 .dist-bar-wrap { margin: 1rem 0; }
 .dist-row { display: flex; align-items: center; gap: 0.7rem; margin: 0.3rem 0; }
-.dist-lbl { font-size: 0.75rem; color: #6b6880; width: 70px; text-align: right; font-family: 'JetBrains Mono', monospace; }
-.dist-bar-bg { flex: 1; background: #1a1927; border-radius: 4px; height: 20px; overflow: hidden; }
+.dist-lbl { font-size: 0.75rem; color: var(--text3); width: 70px; text-align: right; font-family: 'JetBrains Mono', monospace; }
+.dist-bar-bg { flex: 1; background: var(--bar-bg); border-radius: 4px; height: 20px; overflow: hidden; }
 .dist-bar-fill { height: 100%; border-radius: 4px; display: flex; align-items: center; padding-left: 8px; }
-.dist-bar-fill span { font-size: 0.7rem; font-weight: 600; color: rgba(255,255,255,0.9); font-family: 'JetBrains Mono', monospace; }
-.dist-cnt { font-size: 0.73rem; color: #6b6880; width: 30px; }
+.dist-bar-fill span { font-size: 0.7rem; font-weight: 600; color: var(--dist-fill); font-family: 'JetBrains Mono', monospace; }
+.dist-cnt { font-size: 0.73rem; color: var(--text3); width: 30px; }
 
-hr { border-color: #1e1d2e !important; }
+hr { border-color: var(--border) !important; }
 
-/* Streamlit varsayılan beyaz arka planları sıfırla */
+/* Streamlit varsayılan arka planları sıfırla */
 [data-testid="stVerticalBlock"],
 [data-testid="stHorizontalBlock"],
 [data-testid="column"],
@@ -254,10 +332,8 @@ hr { border-color: #1e1d2e !important; }
 section[data-testid="stSidebar"] > div,
 div[data-testid="stDecoration"] { background: transparent !important; }
 
-/* Streamlit üst dekorasyon çizgisini gizle */
 [data-testid="stDecoration"] { display: none !important; }
 
-/* Üst beyaz header/toolbar alanını gizle */
 header[data-testid="stHeader"] {
     background: transparent !important;
     border-bottom: none !important;
@@ -765,6 +841,7 @@ st.markdown("""
   <div class="hero-badge">v2.0 · Otomatik Notlandırma</div>
   <h1 class="hero-title">Optik <span>Notlandırma</span> Sistemi</h1>
   <p class="hero-sub">TXT → Excel dönüşüm · Soru analizi · Sınıf istatistikleri</p>
+  <div class="hero-credit">✦ &nbsp;<b>Öğr. Gör. Hatice Tekiş</b>&nbsp; tarafından geliştirilmiştir</div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -811,29 +888,29 @@ if not isle_btn:
     col1, col2 = st.columns(2)
     with col1:
         st.markdown("""
-        <div style="background:#12111c;border:1px solid #1e1d2e;border-radius:14px;padding:1.7rem;">
-            <div style="font-size:0.7rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#6b6880;margin-bottom:0.9rem;">📌 Format Beklentisi</div>
-            <div style="font-family:'JetBrains Mono',monospace;font-size:0.78rem;color:#5a5870;line-height:2.1;">
+        <div style="background:var(--card-info-bg);border:1px solid var(--border);border-radius:14px;padding:1.7rem;">
+            <div style="font-size:0.7rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--text3);margin-bottom:0.9rem;">📌 Format Beklentisi</div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:0.78rem;color:var(--text3);line-height:2.1;">
                 <span style="color:#7c6af7;font-weight:700;">Format A</span> — TC+OgrNo+Cep (29-30 hane)<br>
-                <span style="color:#4b4870;">YILMAZ MEHMET</span> <span style="color:#e2e0f0;">12345678901<b>12345678</b><span style="color:#34d399;">5554443322</span></span> CAED…<br><br>
+                <span style="color:var(--text3);">YILMAZ MEHMET</span> <span style="color:var(--text);">12345678901<b>12345678</b><span style="color:#34d399;">5554443322</span></span> CAED…<br><br>
                 <span style="color:#7c6af7;font-weight:700;">Format B</span> — TC+OgrNo (19 hane)<br>
-                <span style="color:#4b4870;">YILMAZ MEHMET</span> <span style="color:#e2e0f0;">1234567890112345678</span> AAAD…<br><br>
+                <span style="color:var(--text3);">YILMAZ MEHMET</span> <span style="color:var(--text);">1234567890112345678</span> AAAD…<br><br>
                 <span style="color:#7c6af7;font-weight:700;">Format C</span> — Boşlukla ayrılmış<br>
-                <span style="color:#4b4870;">YILMAZ MEHMET</span> <span style="color:#e2e0f0;">12345678901 12345678</span> ABCD…
+                <span style="color:var(--text3);">YILMAZ MEHMET</span> <span style="color:var(--text);">12345678901 12345678</span> ABCD…
             </div>
         </div>
         """, unsafe_allow_html=True)
     with col2:
         st.markdown("""
-        <div style="background:#12111c;border:1px solid #1e1d2e;border-radius:14px;padding:1.7rem;">
-            <div style="font-size:0.7rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#6b6880;margin-bottom:0.9rem;">📊 Excel Çıktısı (6 Sheet)</div>
-            <div style="font-size:0.82rem;color:#5a5870;line-height:2.3;">
-                <span style="color:#7c6af7;">●</span> <b style="color:#a89ef9;">Proliz Not Girişi</b> → OgrNo + soru puanları<br>
-                <span style="color:#7c6af7;">●</span> <b style="color:#a89ef9;">Detaylı Liste</b> → TC + Cep + Toplam + Sorular<br>
-                <span style="color:#34d399;">●</span> <b style="color:#a89ef9;">Özet</b> → Hızlı genel bakış<br>
-                <span style="color:#f59e0b;">●</span> <b style="color:#a89ef9;">Soru Analizi</b> → Doğru oranı + zorluk<br>
-                <span style="color:#f59e0b;">●</span> <b style="color:#a89ef9;">İstatistik</b> → Ort · Std · Min · Max<br>
-                <span style="color:#6b6880;">●</span> <b style="color:#a89ef9;">Ham TXT</b> → Satır ham cevapları<br><br>
+        <div style="background:var(--card-info-bg);border:1px solid var(--border);border-radius:14px;padding:1.7rem;">
+            <div style="font-size:0.7rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--text3);margin-bottom:0.9rem;">📊 Excel Çıktısı (6 Sheet)</div>
+            <div style="font-size:0.82rem;color:var(--text3);line-height:2.3;">
+                <span style="color:#7c6af7;">●</span> <b style="color:#7c6af7;">Proliz Not Girişi</b> → OgrNo + soru puanları<br>
+                <span style="color:#7c6af7;">●</span> <b style="color:#7c6af7;">Detaylı Liste</b> → TC + Cep + Toplam + Sorular<br>
+                <span style="color:#34d399;">●</span> <b style="color:#34d399;">Özet</b> → Hızlı genel bakış<br>
+                <span style="color:#f59e0b;">●</span> <b style="color:#f59e0b;">Soru Analizi</b> → Doğru oranı + zorluk<br>
+                <span style="color:#f59e0b;">●</span> <b style="color:#f59e0b;">İstatistik</b> → Ort · Std · Min · Max<br>
+                <span style="color:var(--text3);">●</span> <b style="color:var(--text2);">Ham TXT</b> → Satır ham cevapları<br><br>
                 <span style="color:#34d399;">↑</span> Tüm listeler öğrenci numarasına göre sıralı
             </div>
         </div>
@@ -1040,3 +1117,11 @@ else:
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         use_container_width=False,
     )
+
+# ── Footer ────────────────────────────────────────────────────────────────────
+st.markdown("""
+<div class="footer-bar">
+    Optik Notlandırma Sistemi &nbsp;·&nbsp; v2.0<br>
+    <b>Öğr. Gör. Hatice Tekiş</b> tarafından geliştirilmiştir
+</div>
+""", unsafe_allow_html=True)
