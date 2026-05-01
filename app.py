@@ -312,7 +312,8 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     transform: translateY(-1px);
     box-shadow: 0 4px 20px rgba(124,106,247,0.3) !important;
 }
-[data-testid="stDownloadButton"]:nth-of-type(1) > button {
+/* Tüm download butonları yeşil (varsayılan) */
+[data-testid="stDownloadButton"] > button {
     background: rgba(52,211,153,0.1) !important;
     border: 1px solid rgba(52,211,153,0.4) !important;
     color: #059669 !important;
@@ -321,20 +322,18 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     font-weight: 600 !important;
     letter-spacing: -0.01em !important;
 }
-[data-testid="stDownloadButton"]:nth-of-type(1) > button:hover {
+[data-testid="stDownloadButton"] > button:hover {
     background: rgba(52,211,153,0.18) !important;
     box-shadow: 0 4px 16px rgba(52,211,153,0.2) !important;
 }
-[data-testid="stDownloadButton"]:nth-of-type(2) > button {
+/* PDF butonu kırmızı — key ile hedefleme */
+[data-testid="stDownloadButton"]:has(button[data-testid="baseButton-secondary"][kind="secondary"]) > button,
+.pdf-dl-btn [data-testid="stDownloadButton"] > button {
     background: rgba(239,68,68,0.08) !important;
     border: 1px solid rgba(239,68,68,0.35) !important;
     color: #ef4444 !important;
-    border-radius: 9px !important;
-    font-family: 'Inter', sans-serif !important;
-    font-weight: 600 !important;
-    letter-spacing: -0.01em !important;
 }
-[data-testid="stDownloadButton"]:nth-of-type(2) > button:hover {
+.pdf-dl-btn [data-testid="stDownloadButton"] > button:hover {
     background: rgba(239,68,68,0.16) !important;
     box-shadow: 0 4px 16px rgba(239,68,68,0.2) !important;
 }
@@ -1386,7 +1385,7 @@ def _excel_stillendir(wb, sonuclar_sirali, anahtar, df_analiz):
 
 # ── Login Sistemi ────────────────────────────────────────────────────────────
 KULLANICI_ADI = "tekis-jet"
-SIFRE_HASH    = hashlib.sha256("tekis2024".encode()).hexdigest()
+SIFRE_HASH    = hashlib.sha256("tekis2026".encode()).hexdigest()
 
 def sifre_dogrula(sifre):
     return hashlib.sha256(sifre.encode()).hexdigest() == SIFRE_HASH
@@ -1812,13 +1811,40 @@ else:
             use_container_width=True,
         )
     with col_dl2:
+        st.markdown('<div class="pdf-dl-btn">', unsafe_allow_html=True)
         st.download_button(
             label="⬇️  PDF İndir  (.pdf)",
             data=pdf_buf,
             file_name=yuklenen.name.rsplit(".", 1)[0] + "_rapor.pdf",
             mime="application/pdf",
             use_container_width=True,
+            key="pdf_indir",
         )
+        st.markdown('</div>', unsafe_allow_html=True)
+
+# ── PDF butonu rengi: JS ile key'e göre hedefle ──────────────────────────────
+st.markdown("""
+<script>
+(function() {
+    function colorPdfBtn() {
+        // Streamlit her download butonuna data-testid="stDownloadButton" koyar.
+        // İçindeki button metnine göre PDF butonunu bul.
+        var btns = document.querySelectorAll('[data-testid="stDownloadButton"] button');
+        btns.forEach(function(btn) {
+            if (btn.innerText && btn.innerText.includes('PDF')) {
+                btn.style.setProperty('background', 'rgba(239,68,68,0.10)', 'important');
+                btn.style.setProperty('border', '1px solid rgba(239,68,68,0.40)', 'important');
+                btn.style.setProperty('color', '#ef4444', 'important');
+            }
+        });
+    }
+    // İlk yüklemede ve DOM değişikliklerinde çalıştır
+    colorPdfBtn();
+    var obs = new MutationObserver(colorPdfBtn);
+    obs.observe(document.body, { childList: true, subtree: true });
+})();
+</script>
+""", unsafe_allow_html=True)
 
 # ── Footer ────────────────────────────────────────────────────────────────────
 st.markdown("""
