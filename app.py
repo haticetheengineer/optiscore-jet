@@ -1,7 +1,15 @@
+# -*- coding: utf-8 -*-
 import streamlit as st
 import pandas as pd
+import numpy as np
 import re
 import io
+from openpyxl import load_workbook
+from openpyxl.styles import (
+    PatternFill, Font, Alignment, Border, Side, GradientFill
+)
+from openpyxl.utils import get_column_letter
+from openpyxl.formatting.rule import ColorScaleRule, DataBarRule
 
 # ── Sayfa ayarları ──────────────────────────────────────────────────────────
 st.set_page_config(
@@ -11,171 +19,229 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ── Özel CSS ────────────────────────────────────────────────────────────────
+# ── CSS ─────────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@700;800&family=DM+Sans:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
-html, body, [class*="css"] {
-    font-family: 'DM Sans', sans-serif;
-}
+html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 
-/* Ana arka plan */
-.stApp {
-    background: #0f0f13;
-    color: #e8e6f0;
-}
+.stApp { background: #0d0d14; color: #e2e0f0; }
 
-/* Sidebar */
 [data-testid="stSidebar"] {
-    background: #16151d !important;
-    border-right: 1px solid #2a2838;
-}
-[data-testid="stSidebar"] .block-container {
-    padding-top: 2rem;
+    background: linear-gradient(180deg, #12111c 0%, #0f0f1a 100%) !important;
+    border-right: 1px solid #1e1d2e;
 }
 
-/* Başlık */
-.hero {
-    padding: 2.5rem 0 1.5rem 0;
-    border-bottom: 1px solid #2a2838;
-    margin-bottom: 2rem;
+/* Hero */
+.hero-wrap {
+    background: linear-gradient(135deg, #13111f 0%, #0f1520 100%);
+    border: 1px solid #1e1d2e;
+    border-radius: 16px;
+    padding: 2.2rem 2.5rem;
+    margin-bottom: 1.8rem;
+    position: relative;
+    overflow: hidden;
 }
-.hero h1 {
-    font-family: 'Syne', sans-serif;
-    font-size: 2.4rem;
-    font-weight: 800;
-    letter-spacing: -0.03em;
-    color: #ffffff;
+.hero-wrap::before {
+    content: '';
+    position: absolute;
+    top: -60px; right: -60px;
+    width: 220px; height: 220px;
+    background: radial-gradient(circle, rgba(124,106,247,0.15) 0%, transparent 70%);
+    pointer-events: none;
+}
+.hero-title {
+    font-size: 2.0rem;
+    font-weight: 700;
+    letter-spacing: -0.04em;
+    color: #fff;
     margin: 0;
     line-height: 1.1;
 }
-.hero h1 span {
-    color: #7c6af7;
+.hero-title span { color: #7c6af7; }
+.hero-sub {
+    color: #6b6880;
+    font-size: 0.9rem;
+    margin-top: 0.4rem;
+    font-weight: 400;
 }
-.hero p {
-    color: #7a7890;
-    font-size: 0.95rem;
-    margin-top: 0.5rem;
-}
-
-/* Metrik kartları */
-.metric-row {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 1rem;
-    margin: 1.5rem 0;
-}
-.metric-card {
-    background: #1a1926;
-    border: 1px solid #2a2838;
-    border-radius: 12px;
-    padding: 1.2rem 1.4rem;
-}
-.metric-card .label {
-    font-size: 0.75rem;
-    color: #7a7890;
+.hero-badge {
+    display: inline-block;
+    background: rgba(124,106,247,0.15);
+    border: 1px solid rgba(124,106,247,0.3);
+    color: #a89ef9;
+    border-radius: 999px;
+    padding: 0.18rem 0.75rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
-    font-weight: 500;
+    margin-bottom: 0.7rem;
+    font-family: 'JetBrains Mono', monospace;
 }
-.metric-card .value {
-    font-family: 'DM Mono', monospace;
-    font-size: 2rem;
-    font-weight: 500;
-    color: #ffffff;
-    margin-top: 0.2rem;
-    line-height: 1;
-}
-.metric-card .value.accent { color: #7c6af7; }
-.metric-card .value.green  { color: #4ade80; }
-.metric-card .value.amber  { color: #fbbf24; }
 
-/* Adım göstergesi */
-.step-badge {
-    display: inline-flex;
+/* Metric grid */
+.metric-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0.9rem;
+    margin: 1.4rem 0;
+}
+.mc {
+    background: #12111c;
+    border: 1px solid #1e1d2e;
+    border-radius: 12px;
+    padding: 1.1rem 1.3rem;
+    position: relative;
+    overflow: hidden;
+}
+.mc::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 2px;
+}
+.mc.purple::after { background: linear-gradient(90deg, #7c6af7, #a89ef9); }
+.mc.green::after  { background: linear-gradient(90deg, #34d399, #6ee7b7); }
+.mc.amber::after  { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+.mc.rose::after   { background: linear-gradient(90deg, #f43f5e, #fb7185); }
+.mc.sky::after    { background: linear-gradient(90deg, #0ea5e9, #38bdf8); }
+.mc-label { font-size: 0.7rem; color: #6b6880; text-transform: uppercase; letter-spacing: 0.09em; font-weight: 600; }
+.mc-val   { font-family: 'JetBrains Mono', monospace; font-size: 1.9rem; font-weight: 500; color: #fff; margin-top: 0.15rem; line-height: 1; }
+.mc-sub   { font-size: 0.72rem; color: #5a5870; margin-top: 0.25rem; }
+
+/* Section headers */
+.sec-head {
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #6b6880;
+    margin: 1.8rem 0 0.8rem 0;
+    display: flex;
     align-items: center;
     gap: 0.5rem;
-    background: #1a1926;
-    border: 1px solid #2a2838;
-    border-radius: 999px;
-    padding: 0.3rem 0.8rem;
-    font-size: 0.78rem;
-    color: #7c6af7;
-    font-family: 'DM Mono', monospace;
-    margin-bottom: 0.5rem;
+}
+.sec-head::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: #1e1d2e;
 }
 
-/* Uyarı/hata kutuları */
+/* Soru analizi kartları */
+.qa-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+    gap: 0.55rem;
+    margin: 0.8rem 0;
+}
+.qa-card {
+    background: #12111c;
+    border: 1px solid #1e1d2e;
+    border-radius: 10px;
+    padding: 0.65rem 0.5rem;
+    text-align: center;
+    position: relative;
+}
+.qa-card .q-no  { font-size: 0.65rem; color: #6b6880; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+.qa-card .q-pct { font-family: 'JetBrains Mono', monospace; font-size: 1.1rem; font-weight: 600; margin-top: 0.1rem; }
+.qa-card .q-ans { font-size: 0.7rem; color: #6b6880; margin-top: 0.15rem; }
+.qa-card.easy   { border-color: rgba(52,211,153,0.4); }
+.qa-card.easy .q-pct { color: #34d399; }
+.qa-card.mid    { border-color: rgba(251,191,36,0.3); }
+.qa-card.mid .q-pct  { color: #fbbf24; }
+.qa-card.hard   { border-color: rgba(248,113,113,0.4); }
+.qa-card.hard .q-pct { color: #f87171; }
+
+/* Sidebar steps */
+.step-lbl {
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #7c6af7;
+    margin-bottom: 0.4rem;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+/* Warn/ok boxes */
 .warn-box {
-    background: #2a1f00;
+    background: rgba(251,191,36,0.08);
     border-left: 3px solid #fbbf24;
-    padding: 0.7rem 1rem;
+    padding: 0.6rem 1rem;
     border-radius: 0 8px 8px 0;
-    font-size: 0.85rem;
+    font-size: 0.82rem;
     color: #fbbf24;
-    margin: 0.3rem 0;
-    font-family: 'DM Mono', monospace;
+    margin: 0.25rem 0;
+    font-family: 'JetBrains Mono', monospace;
 }
 .ok-box {
-    background: #0d2218;
-    border-left: 3px solid #4ade80;
-    padding: 0.7rem 1rem;
+    background: rgba(52,211,153,0.08);
+    border-left: 3px solid #34d399;
+    padding: 0.7rem 1.1rem;
     border-radius: 0 8px 8px 0;
     font-size: 0.85rem;
-    color: #4ade80;
-    margin: 0.3rem 0;
+    color: #34d399;
+    margin: 0.5rem 0;
 }
 
-/* Tablo */
-.dataframe-container {
-    border-radius: 10px;
-    overflow: hidden;
-    border: 1px solid #2a2838;
-}
-
-/* Input & button override */
-.stTextInput > div > div > input {
-    background: #1a1926 !important;
-    border: 1px solid #2a2838 !important;
-    color: #e8e6f0 !important;
-    font-family: 'DM Mono', monospace !important;
-    border-radius: 8px !important;
-    font-size: 1rem !important;
-}
+/* Butonlar */
 .stButton > button {
-    background: #7c6af7 !important;
+    background: linear-gradient(135deg, #7c6af7, #6b59e8) !important;
     color: white !important;
     border: none !important;
-    border-radius: 8px !important;
-    font-family: 'Syne', sans-serif !important;
-    font-weight: 700 !important;
-    font-size: 0.95rem !important;
-    padding: 0.6rem 1.8rem !important;
+    border-radius: 9px !important;
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 600 !important;
+    font-size: 0.92rem !important;
+    padding: 0.65rem 1.8rem !important;
     transition: all 0.2s !important;
+    letter-spacing: -0.01em !important;
 }
 .stButton > button:hover {
-    background: #6b59e8 !important;
+    background: linear-gradient(135deg, #8b79f8, #7c6af7) !important;
     transform: translateY(-1px);
+    box-shadow: 0 4px 20px rgba(124,106,247,0.3) !important;
 }
 [data-testid="stDownloadButton"] > button {
-    background: #1a2e1a !important;
-    border: 1px solid #4ade80 !important;
-    color: #4ade80 !important;
-    border-radius: 8px !important;
-    font-family: 'Syne', sans-serif !important;
-    font-weight: 700 !important;
+    background: rgba(52,211,153,0.1) !important;
+    border: 1px solid rgba(52,211,153,0.4) !important;
+    color: #34d399 !important;
+    border-radius: 9px !important;
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 600 !important;
+    letter-spacing: -0.01em !important;
 }
 [data-testid="stDownloadButton"] > button:hover {
-    background: #0d2218 !important;
+    background: rgba(52,211,153,0.18) !important;
+    box-shadow: 0 4px 16px rgba(52,211,153,0.2) !important;
 }
-.stFileUploader {
-    background: #1a1926 !important;
-    border-radius: 10px !important;
+.stTextInput > div > div > input {
+    background: #12111c !important;
+    border: 1px solid #1e1d2e !important;
+    color: #e2e0f0 !important;
+    font-family: 'JetBrains Mono', monospace !important;
+    border-radius: 8px !important;
+    font-size: 1rem !important;
+    letter-spacing: 0.08em !important;
+}
+.stTextInput > div > div > input:focus {
+    border-color: #7c6af7 !important;
+    box-shadow: 0 0 0 2px rgba(124,106,247,0.2) !important;
 }
 
-/* Divider */
-hr { border-color: #2a2838 !important; }
+/* Dağılım bar */
+.dist-bar-wrap { margin: 1rem 0; }
+.dist-row { display: flex; align-items: center; gap: 0.7rem; margin: 0.3rem 0; }
+.dist-lbl { font-size: 0.75rem; color: #6b6880; width: 70px; text-align: right; font-family: 'JetBrains Mono', monospace; }
+.dist-bar-bg { flex: 1; background: #1a1927; border-radius: 4px; height: 20px; overflow: hidden; }
+.dist-bar-fill { height: 100%; border-radius: 4px; display: flex; align-items: center; padding-left: 8px; }
+.dist-bar-fill span { font-size: 0.7rem; font-weight: 600; color: rgba(255,255,255,0.9); font-family: 'JetBrains Mono', monospace; }
+.dist-cnt { font-size: 0.73rem; color: #6b6880; width: 30px; }
+
+hr { border-color: #1e1d2e !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -185,32 +251,10 @@ hr { border-color: #2a2838 !important; }
 # ══════════════════════════════════════════════════════════════════════════════
 
 def satir_parse_et(satir):
-    """
-    Desteklenen formatlar (TC + OgrNo bitişik, Cep opsiyonel):
-
-    Format A — TC(11) + OgrNo(8) + Cep(10) bitişik (29 hane):
-      YILMAZ MEHMET  123456789011234567855551112233  CAEDBBAC...
-      → TC=12345678901  OgrNo=12345678  Cep=5551112233
-
-    Format B — TC(11) + OgrNo(8) bitişik, Cep yok (19 hane):
-      YILMAZ MEHMET  1234567890112345678 48  AAADBBAB...
-      → TC=46750356028  OgrNo=24911148  Cep=""
-
-    Format C — TC ve OgrNo boşlukla ayrılmış (eski format):
-      YILMAZ MEHMET  12345678901  12345678  ABCDABCD
-      → TC=12345678901  OgrNo=12345678  Cep=""
-
-    Öğrenci No "C" önekiyle de gelebilir (ÇAP öğrencisi):
-      → TC+C+OgrNo bitişik: 12345678901C12345678  veya ayrı
-
-
-    """
     satir = satir.strip()
     if not satir:
         return None, None
 
-    # ── Sayısal bloğu bul (C öneki dahil) ────────────────────────────────────
-    # Ad Soyad'ın bitmesi için: satır başında harf+boşluk, ardından rakam/C bloğu
     blok_match = re.search(r'(C?\d{11,30})', satir, re.IGNORECASE)
     if not blok_match:
         return None, f"Sayısal blok bulunamadı → {satir[:60]}"
@@ -223,79 +267,48 @@ def satir_parse_et(satir):
     blok_end = blok_match.end()
 
     cap = blok.upper().startswith('C')
-    rakamlar = blok[1:] if cap else blok   # saf rakam kısmı
+    rakamlar = blok[1:] if cap else blok
 
-    tc = ""
-    ogr_no = ""
-    cep = ""
+    tc = ogr_no = cep = ""
 
     if len(rakamlar) >= 19:
-        # ── Format A/B: TC(11) + OgrNo(8) + [Cep(10-11)] bitişik ─────────────
         tc           = rakamlar[:11]
         ogr_no_rakam = rakamlar[11:19]
-        kalan_rakam  = rakamlar[19:]          # 10-11 hane ise cep numarası
-
-        # Cep: 0 ile başlıyorsa 11 hane, 5 ile başlıyorsa 10 hane
+        kalan_rakam  = rakamlar[19:]
         if re.match(r'^(05\d{9}|5\d{9})$', kalan_rakam):
             cep = kalan_rakam if kalan_rakam.startswith('0') else '0' + kalan_rakam
-        elif kalan_rakam:
-            # Cep değil ama fazladan rakam var — yok say
-            cep = ""
-
         ogr_no = ('C' if cap else '') + ogr_no_rakam
 
     elif len(rakamlar) == 11:
-        # ── Format C: TC ayrı, öğrenci no sonraki boşlukla ayrılmış blok ──────
         tc = rakamlar
         kalan_sonra = satir[blok_end:].strip()
-
         ogr_match = re.match(r'^(C?\d{8})', kalan_sonra, re.IGNORECASE)
         if not ogr_match:
             return None, f"Öğrenci no bulunamadı → {kalan_sonra[:30]}"
-
-        ogr_blok = ogr_match.group(1).upper()
-        cap_ogr  = ogr_blok.startswith('C')
-        ogr_no   = ogr_blok  # C dahil olduğu gibi sakla
+        ogr_no   = ogr_match.group(1).upper()
         blok_end += ogr_match.end()
-
-        # Cep: öğrenci no'dan sonra gelen 05xx / 5xx bloğu
-        kalan2 = satir[blok_end:].strip()
+        kalan2    = satir[blok_end:].strip()
         cep_match = re.match(r'^(05\d{9}|5\d{9})', kalan2)
         if cep_match:
             c = cep_match.group(1)
             cep = c if c.startswith('0') else '0' + c
             blok_end += cep_match.end()
-
     else:
         return None, f"Sayısal blok uzunluğu beklenmedik ({len(rakamlar)} hane) → {blok}"
 
-    # ── Cevaplar: kalan metinden A-E ve 0 dışı karakterleri temizle ──────────
-    # Öğrenci no'dan / cep'ten SONRA kalan kısım cevap alanı
-    kalan = satir[blok_end:].strip()
-
-    # Kalan rakam bloklarını temizle (başka sayısal kalıntı varsa)
-    kalan = re.sub(r'\b\d{5,}\b', '', kalan)
-
+    kalan    = satir[blok_end:].strip()
+    kalan    = re.sub(r'\b\d{5,}\b', '', kalan)
     cevaplar = re.sub(r'[^A-Ea-e0 ]', '', kalan).replace(' ', '0').upper()
 
     if not cevaplar:
         return None, "Cevaplar boş"
 
-    return {
-        "ad_soyad": ad_soyad,
-        "tc":       tc,
-        "ogr_no":   ogr_no,
-        "cevaplar": cevaplar,
-        "cep":      cep,
-    }, None
-
-
-def puan_per_soru(anahtar):
-    return 100 / len(anahtar)
+    return {"ad_soyad": ad_soyad, "tc": tc, "ogr_no": ogr_no,
+            "cevaplar": cevaplar, "cep": cep}, None
 
 
 def ogrenci_puanla(cevaplar, anahtar):
-    puan = puan_per_soru(anahtar)
+    puan = 100 / len(anahtar)
     cevaplar = cevaplar.ljust(len(anahtar), '0')[:len(anahtar)]
     return [
         round(puan, 4) if (c not in ('0', ' ', '') and c == a) else 0
@@ -306,7 +319,6 @@ def ogrenci_puanla(cevaplar, anahtar):
 def isle(metin, anahtar):
     satirlar = metin.splitlines()
     sonuclar, hatalar = [], []
-
     for i, satir in enumerate(satirlar, 1):
         veri, hata = satir_parse_et(satir)
         if hata:
@@ -314,7 +326,6 @@ def isle(metin, anahtar):
             continue
         if veri is None:
             continue
-
         puanlar = ogrenci_puanla(veri["cevaplar"], anahtar)
         kayit = {
             "ogr_no":   veri["ogr_no"],
@@ -327,66 +338,402 @@ def isle(metin, anahtar):
             kayit[f"S{s}"] = p
         kayit["toplam"] = round(sum(puanlar), 2)
         sonuclar.append(kayit)
-
     return sonuclar, hatalar
 
 
+def soru_analizi_hesapla(sonuclar, anahtar):
+    """Her soru için doğru yapma oranı ve istatistikler."""
+    analiz = []
+    n = len(sonuclar)
+    puan = round(100 / len(anahtar), 4)
+    for i, dogru_c in enumerate(anahtar, 1):
+        dogru = sum(1 for r in sonuclar if r.get(f"S{i}", 0) > 0)
+        yanlis = sum(1 for r in sonuclar if r.get(f"S{i}", 0) == 0
+                     and len(r.get("cevaplar", "")) >= i
+                     and r["cevaplar"][i-1] not in ('0', ' '))
+        bos = n - dogru - yanlis
+        pct = round(dogru / n * 100, 1) if n else 0
+        analiz.append({
+            "soru": i,
+            "anahtar": dogru_c,
+            "dogru": dogru,
+            "yanlis": yanlis,
+            "bos": bos,
+            "pct": pct,
+        })
+    return analiz
+
+
 def excel_olustur(sonuclar, anahtar):
+    """Şık, renkli, sıralı Excel oluştur."""
     soru_sayisi    = len(anahtar)
     puan_per_s     = round(100 / soru_sayisi, 4)
     soru_kolonlari = [f"S{i}" for i in range(1, soru_sayisi + 1)]
-    soru_baslik    = [f"Soru {i} Puanı" for i in range(1, soru_sayisi + 1)]
+    soru_baslik    = [f"Soru {i}" for i in range(1, soru_sayisi + 1)]
 
-    # ── Sheet 1: Proliz Not Girişi (başlıklı, ogr_no + soru puanları) ────────
-    df_proliz = pd.DataFrame(sonuclar)[["ogr_no"] + soru_kolonlari].copy()
-    df_proliz.columns = ["Öğrenci Numarası"] + soru_baslik
+    # Öğrenci numarasına göre sırala
+    def ogr_sort_key(r):
+        ogr = r["ogr_no"]
+        cap = ogr.startswith('C')
+        num = re.sub(r'[^0-9]', '', ogr)
+        return (cap, int(num) if num else 0)
 
-    # ── Sheet 2: Detaylı Liste ────────────────────────────────────────────────
-    df_detay = pd.DataFrame([{
-        "Öğrenci Numarası": r["ogr_no"],
-        "Adı Soyadı":       r["ad_soyad"],
-        "TC No":            r.get("tc", ""),
-        "Cep Telefonu":     r.get("cep", ""),
-        "Toplam Puan":      r["toplam"],
-        **{f"Soru {i} Puanı": r[f"S{i}"] for i in range(1, soru_sayisi + 1)},
-    } for r in sonuclar])
+    sonuclar_sirali = sorted(sonuclar, key=ogr_sort_key)
 
-    # ── Sheet 3: Özet ─────────────────────────────────────────────────────────
-    df_ozet = pd.DataFrame([{
-        "Öğrenci Numarası": r["ogr_no"],
-        "Adı Soyadı":       r["ad_soyad"],
-        "TC No":            r.get("tc", ""),
-        "Cep Telefonu":     r.get("cep", ""),
-        "Toplam Puan":      r["toplam"],
-    } for r in sonuclar])
+    # ── DataFrames ────────────────────────────────────────────────────────────
+    # Sheet 1: Proliz Not Girişi
+    rows_proliz = []
+    for idx, r in enumerate(sonuclar_sirali, 1):
+        row = {"#": idx, "Öğrenci Numarası": r["ogr_no"]}
+        for i in range(1, soru_sayisi + 1):
+            row[f"Soru {i}"] = r[f"S{i}"]
+        rows_proliz.append(row)
+    df_proliz = pd.DataFrame(rows_proliz)
 
-    # ── Sheet 4: Ham TXT ──────────────────────────────────────────────────────
-    df_ham = pd.DataFrame([{
-        "Satır No":         i + 1,
-        "Öğrenci Numarası": r["ogr_no"],
-        "Adı Soyadı":       r["ad_soyad"],
-        "TC No":            r.get("tc", ""),
-        "Cep Telefonu":     r.get("cep", ""),
-        "Ham Cevaplar":     r.get("cevaplar", ""),
-    } for i, r in enumerate(sonuclar)])
+    # Sheet 2: Detaylı Liste
+    rows_detay = []
+    for idx, r in enumerate(sonuclar_sirali, 1):
+        row = {
+            "#":                idx,
+            "Öğrenci Numarası": r["ogr_no"],
+            "Adı Soyadı":       r["ad_soyad"],
+            "TC No":            r.get("tc", ""),
+            "Cep Telefonu":     r.get("cep", ""),
+            "Toplam Puan":      r["toplam"],
+            "Başarı Durumu":    "✓ Geçti" if r["toplam"] >= 50 else "✗ Kaldı",
+        }
+        for i in range(1, soru_sayisi + 1):
+            row[f"S{i}"] = r[f"S{i}"]
+        rows_detay.append(row)
+    df_detay = pd.DataFrame(rows_detay)
 
-    # ── Sheet 5: İşlem Özeti ──────────────────────────────────────────────────
-    df_islem = pd.DataFrame([
-        {"Bilgi": "Soru Sayısı",             "Değer": soru_sayisi},
-        {"Bilgi": "Soru Başına Puan",        "Değer": puan_per_s},
-        {"Bilgi": "İşlenen Öğrenci Sayısı", "Değer": len(sonuclar)},
-        {"Bilgi": "Cevap Anahtarı",          "Değer": anahtar},
-    ])
+    # Sheet 3: Özet
+    rows_ozet = []
+    for idx, r in enumerate(sonuclar_sirali, 1):
+        rows_ozet.append({
+            "#":                idx,
+            "Öğrenci Numarası": r["ogr_no"],
+            "Adı Soyadı":       r["ad_soyad"],
+            "TC No":            r.get("tc", ""),
+            "Cep Telefonu":     r.get("cep", ""),
+            "Toplam Puan":      r["toplam"],
+            "Başarı Durumu":    "Geçti" if r["toplam"] >= 50 else "Kaldı",
+        })
+    df_ozet = pd.DataFrame(rows_ozet)
 
+    # Sheet 4: Soru Analizi
+    analiz = soru_analizi_hesapla(sonuclar, anahtar)
+    rows_analiz = []
+    for a in analiz:
+        zorluk = "Kolay" if a["pct"] >= 70 else ("Orta" if a["pct"] >= 40 else "Zor")
+        rows_analiz.append({
+            "Soru No":          a["soru"],
+            "Doğru Cevap":      a["anahtar"],
+            "Doğru Yapan":      a["dogru"],
+            "Yanlış Yapan":     a["yanlis"],
+            "Boş Bırakan":      a["bos"],
+            "Doğru Oranı (%)":  a["pct"],
+            "Zorluk":           zorluk,
+        })
+    df_analiz = pd.DataFrame(rows_analiz)
+
+    # Sheet 5: İstatistik
+    toplamlar = [r["toplam"] for r in sonuclar]
+    gecenler  = [t for t in toplamlar if t >= 50]
+    rows_istat = [
+        {"İstatistik": "Toplam Öğrenci",      "Değer": len(sonuclar)},
+        {"İstatistik": "Geçen Öğrenci",        "Değer": len(gecenler)},
+        {"İstatistik": "Kalan Öğrenci",        "Değer": len(sonuclar) - len(gecenler)},
+        {"İstatistik": "Geçme Oranı (%)",      "Değer": round(len(gecenler)/len(sonuclar)*100,1) if sonuclar else 0},
+        {"İstatistik": "Sınıf Ortalaması",     "Değer": round(np.mean(toplamlar), 2) if toplamlar else 0},
+        {"İstatistik": "Standart Sapma",        "Değer": round(np.std(toplamlar), 2) if toplamlar else 0},
+        {"İstatistik": "En Yüksek Puan",       "Değer": max(toplamlar) if toplamlar else 0},
+        {"İstatistik": "En Düşük Puan",        "Değer": min(toplamlar) if toplamlar else 0},
+        {"İstatistik": "Medyan Puan",           "Değer": round(np.median(toplamlar), 2) if toplamlar else 0},
+        {"İstatistik": "Soru Sayısı",           "Değer": soru_sayisi},
+        {"İstatistik": "Soru Başına Puan",      "Değer": puan_per_s},
+        {"İstatistik": "Cevap Anahtarı",        "Değer": anahtar},
+    ]
+    df_istat = pd.DataFrame(rows_istat)
+
+    # Sheet 6: Ham TXT
+    rows_ham = []
+    for idx, r in enumerate(sonuclar_sirali, 1):
+        rows_ham.append({
+            "#":                idx,
+            "Öğrenci Numarası": r["ogr_no"],
+            "Adı Soyadı":       r["ad_soyad"],
+            "TC No":            r.get("tc", ""),
+            "Cep Telefonu":     r.get("cep", ""),
+            "Ham Cevaplar":     r.get("cevaplar", ""),
+        })
+    df_ham = pd.DataFrame(rows_ham)
+
+    # ── Excel Yaz ────────────────────────────────────────────────────────────
     buf = io.BytesIO()
     with pd.ExcelWriter(buf, engine="openpyxl") as writer:
-        df_proliz.to_excel(writer, sheet_name="Proliz Not Girişi", index=False)
-        df_detay.to_excel(writer,  sheet_name="Detaylı Liste",      index=False)
-        df_ozet.to_excel(writer,   sheet_name="Özet",               index=False)
-        df_ham.to_excel(writer,    sheet_name="Ham TXT",             index=False)
-        df_islem.to_excel(writer,  sheet_name="İşlem Özeti",         index=False)
+        df_proliz.to_excel(writer,  sheet_name="Proliz Not Girişi", index=False)
+        df_detay.to_excel(writer,   sheet_name="Detaylı Liste",      index=False)
+        df_ozet.to_excel(writer,    sheet_name="Özet",               index=False)
+        df_analiz.to_excel(writer,  sheet_name="Soru Analizi",       index=False)
+        df_istat.to_excel(writer,   sheet_name="İstatistik",          index=False)
+        df_ham.to_excel(writer,     sheet_name="Ham TXT",             index=False)
+
     buf.seek(0)
-    return buf
+    wb = load_workbook(buf)
+    _excel_stillendir(wb, sonuclar_sirali, anahtar, df_analiz)
+
+    buf2 = io.BytesIO()
+    wb.save(buf2)
+    buf2.seek(0)
+    return buf2
+
+
+def _stil(bold=False, color="000000", bg=None, size=10, align="left",
+          valign="center", wrap=False, border=False, italic=False):
+    f = Font(bold=bold, color=color, size=size, italic=italic,
+             name="Calibri")
+    a = Alignment(horizontal=align, vertical=valign, wrap_text=wrap)
+    fill = PatternFill("solid", fgColor=bg) if bg else PatternFill()
+    sides = Side(style="thin", color="D0CEDF") if border else Side()
+    b = Border(left=sides, right=sides, top=sides, bottom=sides)
+    return f, a, fill, b
+
+
+def _excel_stillendir(wb, sonuclar_sirali, anahtar, df_analiz):
+    soru_sayisi = len(anahtar)
+
+    # Renk paleti
+    C_HEADER_BG  = "1E1B35"   # koyu mor başlık
+    C_HEADER_FG  = "FFFFFF"
+    C_ALT1       = "F8F7FF"   # açık satır
+    C_ALT2       = "FFFFFF"   # beyaz satır
+    C_ACCENT     = "7C6AF7"   # mor vurgu
+    C_GREEN_BG   = "EAFAF1"
+    C_RED_BG     = "FEF2F2"
+    C_GREEN_FG   = "1A6B3C"
+    C_RED_FG     = "9B1C1C"
+    C_EASY       = "D1FAE5"
+    C_MID        = "FEF3C7"
+    C_HARD       = "FEE2E2"
+    C_NUM_BG     = "EEF2FF"   # sıra no arkaplan
+
+    def header_row(ws, cols):
+        for col_idx, col_name in enumerate(cols, 1):
+            c = ws.cell(row=1, column=col_idx, value=col_name)
+            c.font      = Font(bold=True, color=C_HEADER_FG, size=10, name="Calibri")
+            c.fill      = PatternFill("solid", fgColor=C_HEADER_BG)
+            c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            c.border    = Border(
+                left=Side(style="thin", color="4A4770"),
+                right=Side(style="thin", color="4A4770"),
+                bottom=Side(style="medium", color=C_ACCENT),
+            )
+        ws.row_dimensions[1].height = 28
+
+    def alt_fill(row_idx):
+        return PatternFill("solid", fgColor=C_ALT1 if row_idx % 2 == 0 else C_ALT2)
+
+    def auto_width(ws, min_w=8, max_w=30):
+        for col in ws.columns:
+            length = max(
+                (len(str(c.value)) if c.value is not None else 0)
+                for c in col
+            )
+            ws.column_dimensions[get_column_letter(col[0].column)].width = max(min_w, min(length + 2, max_w))
+
+    thin_border = Border(
+        left=Side(style="thin", color="E0DEEE"),
+        right=Side(style="thin", color="E0DEEE"),
+        top=Side(style="thin", color="E0DEEE"),
+        bottom=Side(style="thin", color="E0DEEE"),
+    )
+
+    # ── Sheet 1: Proliz Not Girişi ──────────────────────────────────────────
+    ws = wb["Proliz Not Girişi"]
+    cols = list(ws.iter_cols(1, ws.max_column, 1, 1))
+    col_names = [c[0].value for c in cols]
+    header_row(ws, col_names)
+    for row in ws.iter_rows(min_row=2, max_row=ws.max_row):
+        for ci, cell in enumerate(row):
+            cell.fill   = alt_fill(row[0].row)
+            cell.border = thin_border
+            cell.font   = Font(name="Calibri", size=10,
+                               color="5B5880" if ci == 0 else "1A1835")
+            cell.alignment = Alignment(horizontal="center" if ci != 1 else "left",
+                                       vertical="center")
+            if ci == 0:  # # sütunu
+                cell.fill = PatternFill("solid", fgColor=C_NUM_BG)
+                cell.font = Font(name="Calibri", size=9, color="7C6AF7", bold=True)
+            elif ci == 1:  # Öğrenci No
+                cell.font = Font(name="Calibri", size=10, bold=True, color="1A1835")
+            elif ci >= 2:  # puan hücreleri
+                if cell.value and float(cell.value) > 0:
+                    cell.font = Font(name="Calibri", size=10, color="1A6B3C", bold=True)
+                else:
+                    cell.font = Font(name="Calibri", size=10, color="9B1C1C")
+    ws.freeze_panes = "C2"
+    auto_width(ws)
+    ws.column_dimensions["A"].width = 5
+
+    # ── Sheet 2: Detaylı Liste ──────────────────────────────────────────────
+    ws = wb["Detaylı Liste"]
+    cols = list(ws.iter_cols(1, ws.max_column, 1, 1))
+    col_names = [c[0].value for c in cols]
+    header_row(ws, col_names)
+
+    # Toplam puan ve başarı durumu kolon indexlerini bul
+    try:
+        toplam_col = col_names.index("Toplam Puan") + 1
+        basari_col = col_names.index("Başarı Durumu") + 1
+    except ValueError:
+        toplam_col = basari_col = None
+
+    for row in ws.iter_rows(min_row=2, max_row=ws.max_row):
+        gecti = None
+        if toplam_col:
+            puan_val = row[toplam_col - 1].value
+            gecti = puan_val is not None and float(puan_val) >= 50
+
+        for ci, cell in enumerate(row):
+            cell.border = thin_border
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+
+            if ci == 0:  # Sıra no
+                cell.fill = PatternFill("solid", fgColor=C_NUM_BG)
+                cell.font = Font(name="Calibri", size=9, color="7C6AF7", bold=True)
+            elif toplam_col and ci == toplam_col - 1:
+                cell.fill = PatternFill("solid", fgColor=C_GREEN_BG if gecti else C_RED_BG)
+                cell.font = Font(name="Calibri", size=10, bold=True,
+                                 color=C_GREEN_FG if gecti else C_RED_FG)
+            elif basari_col and ci == basari_col - 1:
+                cell.fill = PatternFill("solid", fgColor=C_GREEN_BG if gecti else C_RED_BG)
+                cell.font = Font(name="Calibri", size=10, bold=True,
+                                 color=C_GREEN_FG if gecti else C_RED_FG)
+            else:
+                cell.fill = alt_fill(row[0].row)
+                cell.font = Font(name="Calibri", size=10, color="1A1835")
+    ws.freeze_panes = "C2"
+    auto_width(ws)
+    ws.column_dimensions["A"].width = 5
+
+    # ── Sheet 3: Özet ───────────────────────────────────────────────────────
+    ws = wb["Özet"]
+    cols = list(ws.iter_cols(1, ws.max_column, 1, 1))
+    col_names = [c[0].value for c in cols]
+    header_row(ws, col_names)
+    try:
+        toplam_col_o = col_names.index("Toplam Puan") + 1
+        basari_col_o = col_names.index("Başarı Durumu") + 1
+    except ValueError:
+        toplam_col_o = basari_col_o = None
+
+    for row in ws.iter_rows(min_row=2, max_row=ws.max_row):
+        gecti = None
+        if toplam_col_o:
+            pv = row[toplam_col_o - 1].value
+            gecti = pv is not None and float(pv) >= 50
+        for ci, cell in enumerate(row):
+            cell.border = thin_border
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+            if ci == 0:
+                cell.fill = PatternFill("solid", fgColor=C_NUM_BG)
+                cell.font = Font(name="Calibri", size=9, color="7C6AF7", bold=True)
+            elif toplam_col_o and ci == toplam_col_o - 1:
+                cell.fill = PatternFill("solid", fgColor=C_GREEN_BG if gecti else C_RED_BG)
+                cell.font = Font(name="Calibri", size=10, bold=True,
+                                 color=C_GREEN_FG if gecti else C_RED_FG)
+            elif basari_col_o and ci == basari_col_o - 1:
+                cell.fill = PatternFill("solid", fgColor=C_GREEN_BG if gecti else C_RED_BG)
+                cell.font = Font(name="Calibri", size=10, bold=True,
+                                 color=C_GREEN_FG if gecti else C_RED_FG)
+            else:
+                cell.fill = alt_fill(row[0].row)
+                cell.font = Font(name="Calibri", size=10, color="1A1835")
+    auto_width(ws)
+    ws.column_dimensions["A"].width = 5
+
+    # ── Sheet 4: Soru Analizi ───────────────────────────────────────────────
+    ws = wb["Soru Analizi"]
+    cols = list(ws.iter_cols(1, ws.max_column, 1, 1))
+    col_names = [c[0].value for c in cols]
+    header_row(ws, col_names)
+    try:
+        zorluk_col = col_names.index("Zorluk") + 1
+        oran_col   = col_names.index("Doğru Oranı (%)") + 1
+    except ValueError:
+        zorluk_col = oran_col = None
+
+    for row in ws.iter_rows(min_row=2, max_row=ws.max_row):
+        zorluk_val = row[zorluk_col - 1].value if zorluk_col else None
+        bg = C_EASY if zorluk_val == "Kolay" else (C_MID if zorluk_val == "Orta" else C_HARD)
+        fg = C_GREEN_FG if zorluk_val == "Kolay" else ("92400E" if zorluk_val == "Orta" else C_RED_FG)
+        for ci, cell in enumerate(row):
+            cell.border = thin_border
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+            cell.fill = alt_fill(row[0].row)
+            cell.font = Font(name="Calibri", size=10, color="1A1835")
+            if zorluk_col and ci == zorluk_col - 1:
+                cell.fill = PatternFill("solid", fgColor=bg)
+                cell.font = Font(name="Calibri", size=10, bold=True, color=fg)
+            if oran_col and ci == oran_col - 1:
+                v = cell.value
+                if v is not None:
+                    ov = float(v)
+                    if ov >= 70:
+                        cell.font = Font(name="Calibri", size=10, bold=True, color=C_GREEN_FG)
+                    elif ov >= 40:
+                        cell.font = Font(name="Calibri", size=10, bold=True, color="92400E")
+                    else:
+                        cell.font = Font(name="Calibri", size=10, bold=True, color=C_RED_FG)
+    auto_width(ws)
+
+    # Koşullu biçimlendirme: Doğru Oranı sütununa renk skalası
+    if oran_col:
+        col_letter = get_column_letter(oran_col)
+        ws.conditional_formatting.add(
+            f"{col_letter}2:{col_letter}{ws.max_row}",
+            ColorScaleRule(
+                start_type="num", start_value=0,   start_color="FEE2E2",
+                mid_type="num",   mid_value=50,    mid_color="FEF3C7",
+                end_type="num",   end_value=100,   end_color="D1FAE5",
+            )
+        )
+
+    # ── Sheet 5: İstatistik ─────────────────────────────────────────────────
+    ws = wb["İstatistik"]
+    header_row(ws, ["İstatistik", "Değer"])
+    for row in ws.iter_rows(min_row=2, max_row=ws.max_row):
+        for ci, cell in enumerate(row):
+            cell.border = thin_border
+            cell.alignment = Alignment(horizontal="left" if ci == 0 else "right",
+                                       vertical="center")
+            if ci == 0:
+                cell.fill = PatternFill("solid", fgColor=C_ALT1)
+                cell.font = Font(name="Calibri", size=10, bold=True, color="3B3860")
+            else:
+                cell.fill = PatternFill("solid", fgColor=C_ALT2)
+                cell.font = Font(name="Calibri", size=10, color="1A1835")
+    auto_width(ws)
+
+    # ── Sheet 6: Ham TXT ────────────────────────────────────────────────────
+    ws = wb["Ham TXT"]
+    cols = list(ws.iter_cols(1, ws.max_column, 1, 1))
+    col_names = [c[0].value for c in cols]
+    header_row(ws, col_names)
+    for row in ws.iter_rows(min_row=2, max_row=ws.max_row):
+        for ci, cell in enumerate(row):
+            cell.border = thin_border
+            cell.alignment = Alignment(horizontal="center" if ci != 4 else "left",
+                                       vertical="center")
+            cell.fill = alt_fill(row[0].row)
+            cell.font = Font(name="Calibri", size=10,
+                             color="7C6AF7" if ci == 0 else "1A1835",
+                             bold=(ci == 0))
+            if ci == 5:  # Ham Cevaplar
+                cell.font = Font(name="Courier New", size=9, color="4A4770")
+    auto_width(ws, max_w=50)
+    ws.column_dimensions["A"].width = 5
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -394,82 +741,101 @@ def excel_olustur(sonuclar, anahtar):
 # ══════════════════════════════════════════════════════════════════════════════
 
 st.markdown("""
-<div class="hero">
-  <h1>Optik <span>Notlandırma</span></h1>
-  <p>TXT → Excel otomatik dönüşüm & puanlama sistemi</p>
+<div class="hero-wrap">
+  <div class="hero-badge">v2.0 · Otomatik Notlandırma</div>
+  <h1 class="hero-title">Optik <span>Notlandırma</span> Sistemi</h1>
+  <p class="hero-sub">TXT → Excel dönüşüm · Soru analizi · Sınıf istatistikleri</p>
 </div>
 """, unsafe_allow_html=True)
 
+# ── Sidebar ─────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown('<div class="step-badge">① Cevap Anahtarı</div>', unsafe_allow_html=True)
+    st.markdown('<p class="step-lbl">① Cevap Anahtarı</p>', unsafe_allow_html=True)
     anahtar_input = st.text_input(
         "Cevap anahtarı",
         placeholder="örn: ABCDABCDABCD",
         label_visibility="collapsed",
     ).strip().upper()
 
-    st.markdown('<div style="margin-top:1.5rem"></div>', unsafe_allow_html=True)
-    st.markdown('<div class="step-badge">② Dosya Yükle</div>', unsafe_allow_html=True)
+    if anahtar_input:
+        st.markdown(
+            f'<div style="font-family:JetBrains Mono,monospace;font-size:0.75rem;'
+            f'color:#7c6af7;margin-top:0.3rem;">'
+            f'{len(anahtar_input)} soru · {round(100/len(anahtar_input),2)} pt/soru</div>',
+            unsafe_allow_html=True
+        )
+
+    st.markdown('<p class="step-lbl" style="margin-top:1.5rem;">② TXT Dosyası</p>', unsafe_allow_html=True)
     yuklenen = st.file_uploader(
-        "Optik okuyucu TXT dosyası",
+        "Optik okuyucu TXT",
         type=["txt"],
         label_visibility="collapsed",
     )
 
-    st.markdown('<div style="margin-top:1.5rem"></div>', unsafe_allow_html=True)
+    st.markdown('<div style="margin-top:1.8rem"></div>', unsafe_allow_html=True)
     isle_btn = st.button("▶  Notlandır", use_container_width=True)
 
+    st.markdown("---")
+    st.markdown("""
+    <div style="font-size:0.72rem;color:#4a4860;line-height:1.8;">
+    <b style="color:#6b6880;">Desteklenen Formatlar</b><br>
+    <span style="color:#7c6af7;">A</span> TC+OgrNo+Cep bitişik<br>
+    <span style="color:#7c6af7;">B</span> TC+OgrNo bitişik<br>
+    <span style="color:#7c6af7;">C</span> Boşlukla ayrılmış<br><br>
+    ÇAP öğrencisi: OgrNo başında C
+    </div>
+    """, unsafe_allow_html=True)
+
+# ── Ana içerik ───────────────────────────────────────────────────────────────
 if not isle_btn:
     col1, col2 = st.columns(2)
     with col1:
         st.markdown("""
-        <div style="background:#1a1926;border:1px solid #2a2838;border-radius:12px;padding:1.8rem;">
-            <div style="font-family:'Syne',sans-serif;font-size:1.1rem;font-weight:700;color:#fff;margin-bottom:1rem;">
-                📌 TXT Format Beklentisi
-            </div>
-            <div style="font-family:'DM Mono',monospace;font-size:0.82rem;color:#7a7890;line-height:2.2;">
-                <span style="color:#7c6af7;">Format A</span> — TC+OgrNo+Cep bitişik (29-30 hane):<br>
-                ELMALI MUSTAFA 42958234984<b style="color:#e8e6f0;">24911134</b><b style="color:#4ade80;">5445617338</b> CAEDBBAC…<br><br>
-                <span style="color:#7c6af7;">Format B</span> — TC+OgrNo bitişik, Cep yok (19 hane):<br>
-                BAYER EBRAR 4675035602824911148 AAADBBAB…<br><br>
-                <span style="color:#7c6af7;">Format C</span> — TC ve OgrNo boşlukla ayrılmış:<br>
-                ALİ YILMAZ 12345678901 20230001 ABCDABCD<br><br>
-                <span style="color:#7a7890;">ÇAP öğrencisi için OgrNo başında C harfi olabilir.</span>
+        <div style="background:#12111c;border:1px solid #1e1d2e;border-radius:14px;padding:1.7rem;">
+            <div style="font-size:0.7rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#6b6880;margin-bottom:0.9rem;">📌 Format Beklentisi</div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:0.78rem;color:#5a5870;line-height:2.1;">
+                <span style="color:#7c6af7;font-weight:700;">Format A</span> — TC+OgrNo+Cep (29-30 hane)<br>
+                <span style="color:#4b4870;">ELMALI MUSTAFA</span> <span style="color:#e2e0f0;">42958234984<b>24911134</b><span style="color:#34d399;">5445617338</span></span> CAED…<br><br>
+                <span style="color:#7c6af7;font-weight:700;">Format B</span> — TC+OgrNo (19 hane)<br>
+                <span style="color:#4b4870;">BAYER EBRAR</span> <span style="color:#e2e0f0;">4675035602824911148</span> AAAD…<br><br>
+                <span style="color:#7c6af7;font-weight:700;">Format C</span> — Boşlukla ayrılmış<br>
+                <span style="color:#4b4870;">ALİ YILMAZ</span> <span style="color:#e2e0f0;">12345678901 20230001</span> ABCD…
             </div>
         </div>
         """, unsafe_allow_html=True)
     with col2:
         st.markdown("""
-        <div style="background:#1a1926;border:1px solid #2a2838;border-radius:12px;padding:1.8rem;">
-            <div style="font-family:'Syne',sans-serif;font-size:1.1rem;font-weight:700;color:#fff;margin-bottom:1rem;">
-                📊 Çıktı Yapısı (5 Sheet)
-            </div>
-            <div style="font-size:0.85rem;color:#7a7890;line-height:2.4;">
-                <span style="color:#7c6af7;">Proliz Not Girişi</span> → OgrNo + Soru puanları<br>
-                <span style="color:#7c6af7;">Detaylı Liste</span> → OgrNo + Ad + TC + Cep + Toplam + Sorular<br>
-                <span style="color:#4ade80;">Özet</span> → OgrNo + Ad + TC + Cep + Toplam<br>
-                <span style="color:#4ade80;">Ham TXT</span> → Satır No + Ham cevap dizisi<br>
-                <span style="color:#fbbf24;">İşlem Özeti</span> → Soru sayısı, puan, anahtar<br><br>
-                Doğru → <b style="color:#4ade80;">100 ÷ soru sayısı</b> &nbsp;|&nbsp; Yanlış/Boş → <b style="color:#f87171;">0</b>
+        <div style="background:#12111c;border:1px solid #1e1d2e;border-radius:14px;padding:1.7rem;">
+            <div style="font-size:0.7rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#6b6880;margin-bottom:0.9rem;">📊 Excel Çıktısı (6 Sheet)</div>
+            <div style="font-size:0.82rem;color:#5a5870;line-height:2.3;">
+                <span style="color:#7c6af7;">●</span> <b style="color:#a89ef9;">Proliz Not Girişi</b> → OgrNo + soru puanları<br>
+                <span style="color:#7c6af7;">●</span> <b style="color:#a89ef9;">Detaylı Liste</b> → TC + Cep + Toplam + Sorular<br>
+                <span style="color:#34d399;">●</span> <b style="color:#a89ef9;">Özet</b> → Hızlı genel bakış<br>
+                <span style="color:#f59e0b;">●</span> <b style="color:#a89ef9;">Soru Analizi</b> → Doğru oranı + zorluk<br>
+                <span style="color:#f59e0b;">●</span> <b style="color:#a89ef9;">İstatistik</b> → Ort · Std · Min · Max<br>
+                <span style="color:#6b6880;">●</span> <b style="color:#a89ef9;">Ham TXT</b> → Satır ham cevapları<br><br>
+                <span style="color:#34d399;">↑</span> Tüm listeler öğrenci numarasına göre sıralı
             </div>
         </div>
         """, unsafe_allow_html=True)
 
 elif not anahtar_input:
     st.warning("⚠️ Lütfen sol panelden cevap anahtarını girin.")
-
 elif not yuklenen:
     st.warning("⚠️ Lütfen sol panelden bir TXT dosyası yükleyin.")
-
 else:
     try:
         raw = yuklenen.read()
+        metin = None
         for enc in ("utf-8", "cp1254", "latin-1"):
             try:
                 metin = raw.decode(enc)
                 break
             except UnicodeDecodeError:
                 continue
+        if metin is None:
+            st.error("Dosya okunamadı.")
+            st.stop()
     except Exception as e:
         st.error(f"Dosya okunamadı: {e}")
         st.stop()
@@ -481,74 +847,176 @@ else:
         st.error("Hiç öğrenci verisi işlenemedi. Dosya formatını kontrol edin.")
         st.stop()
 
-    # — Metrik kartlar ─────────────────────────────────────────────────────────
-    toplamlar  = [r["toplam"] for r in sonuclar]
+    # ── Metrik kartları ──────────────────────────────────────────────────────
+    toplamlar   = [r["toplam"] for r in sonuclar]
     soru_sayisi = len(anahtar_input)
-    soru_puani  = round(100 / soru_sayisi, 2)
-    ort         = sum(toplamlar) / len(toplamlar)
+    ort         = np.mean(toplamlar)
+    std         = np.std(toplamlar)
     gecme       = sum(1 for t in toplamlar if t >= 50)
-    cepli       = sum(1 for r in sonuclar if r.get("cep"))
+    en_yuksek   = max(toplamlar)
 
     st.markdown(f"""
-    <div class="metric-row">
-        <div class="metric-card">
-            <div class="label">Öğrenci</div>
-            <div class="value accent">{len(sonuclar)}</div>
+    <div class="metric-grid">
+        <div class="mc purple">
+            <div class="mc-label">Öğrenci</div>
+            <div class="mc-val">{len(sonuclar)}</div>
+            <div class="mc-sub">{soru_sayisi} soru · {round(100/soru_sayisi,2)} pt/soru</div>
         </div>
-        <div class="metric-card">
-            <div class="label">Soru Sayısı</div>
-            <div class="value">{soru_sayisi} <span style="font-size:1rem;color:#7a7890;">× {soru_puani} pt</span></div>
+        <div class="mc green">
+            <div class="mc-label">Sınıf Ortalaması</div>
+            <div class="mc-val">{ort:.1f}</div>
+            <div class="mc-sub">100 üzerinden</div>
         </div>
-        <div class="metric-card">
-            <div class="label">Sınıf Ortalaması</div>
-            <div class="value green">{ort:.1f}</div>
+        <div class="mc sky">
+            <div class="mc-label">Standart Sapma</div>
+            <div class="mc-val">{std:.1f}</div>
+            <div class="mc-sub">Dağılım genişliği</div>
         </div>
-        <div class="metric-card">
-            <div class="label">Geçen (≥50)</div>
-            <div class="value amber">{gecme}</div>
+        <div class="mc amber">
+            <div class="mc-label">Geçen (≥50)</div>
+            <div class="mc-val">{gecme}</div>
+            <div class="mc-sub">%{round(gecme/len(sonuclar)*100,1)} geçme oranı</div>
+        </div>
+        <div class="mc rose">
+            <div class="mc-label">En Yüksek Puan</div>
+            <div class="mc-val">{en_yuksek:.1f}</div>
+            <div class="mc-sub">En düşük: {min(toplamlar):.1f}</div>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-    # — Hatalar ────────────────────────────────────────────────────────────────
+    # ── Hatalar ─────────────────────────────────────────────────────────────
     if hatalar:
         with st.expander(f"⚠️ {len(hatalar)} satırda sorun tespit edildi", expanded=False):
             for h in hatalar:
                 st.markdown(f'<div class="warn-box">{h}</div>', unsafe_allow_html=True)
 
-    # — Önizleme tablosu ───────────────────────────────────────────────────────
-    st.markdown("#### 📋 Kontrol Tablosu (İlk 20 Öğrenci)")
-    df_onizleme = pd.DataFrame([{
+    # ── Puan Dağılımı ────────────────────────────────────────────────────────
+    st.markdown('<div class="sec-head">📈 Puan Dağılımı</div>', unsafe_allow_html=True)
+
+    araliklar = [
+        ("0–24",  0,  24,  "#f87171"),
+        ("25–49", 25, 49,  "#fb923c"),
+        ("50–64", 50, 64,  "#fbbf24"),
+        ("65–79", 65, 79,  "#34d399"),
+        ("80–89", 80, 89,  "#22d3ee"),
+        ("90–100",90, 100, "#7c6af7"),
+    ]
+    dagilim_html = '<div class="dist-bar-wrap">'
+    max_cnt = 1
+    cnts = []
+    for lbl, lo, hi, color in araliklar:
+        cnt = sum(1 for t in toplamlar if lo <= t <= hi)
+        cnts.append(cnt)
+        if cnt > max_cnt:
+            max_cnt = cnt
+
+    for (lbl, lo, hi, color), cnt in zip(araliklar, cnts):
+        pct_bar = round(cnt / max_cnt * 100)
+        dagilim_html += f"""
+        <div class="dist-row">
+            <div class="dist-lbl">{lbl}</div>
+            <div class="dist-bar-bg">
+                <div class="dist-bar-fill" style="width:{pct_bar}%;background:{color};">
+                    <span>{'%'+str(round(cnt/len(toplamlar)*100,1)) if cnt else ''}</span>
+                </div>
+            </div>
+            <div class="dist-cnt">{cnt}</div>
+        </div>"""
+    dagilim_html += '</div>'
+    st.markdown(dagilim_html, unsafe_allow_html=True)
+
+    # ── Soru Analizi ─────────────────────────────────────────────────────────
+    st.markdown('<div class="sec-head">🔍 Soru Analizi</div>', unsafe_allow_html=True)
+
+    analiz = soru_analizi_hesapla(sonuclar, anahtar_input)
+
+    st.markdown("""
+    <div style="display:flex;gap:1.2rem;margin-bottom:0.7rem;font-size:0.75rem;color:#6b6880;">
+        <span><span style="color:#34d399;font-weight:700;">■</span> Kolay ≥70%</span>
+        <span><span style="color:#fbbf24;font-weight:700;">■</span> Orta 40-69%</span>
+        <span><span style="color:#f87171;font-weight:700;">■</span> Zor &lt;40%</span>
+    </div>
+    """, unsafe_allow_html=True)
+
+    cards_html = '<div class="qa-grid">'
+    for a in analiz:
+        cls = "easy" if a["pct"] >= 70 else ("mid" if a["pct"] >= 40 else "hard")
+        cards_html += f"""
+        <div class="qa-card {cls}">
+            <div class="q-no">S{a['soru']}</div>
+            <div class="q-pct">%{a['pct']:.0f}</div>
+            <div class="q-ans">{a['anahtar']}</div>
+        </div>"""
+    cards_html += '</div>'
+    st.markdown(cards_html, unsafe_allow_html=True)
+
+    # Detaylı tablo
+    with st.expander("📋 Soru Analizi Detayları", expanded=False):
+        df_analiz_ui = pd.DataFrame([{
+            "Soru": f"S{a['soru']}",
+            "Anahtar": a["anahtar"],
+            "Doğru": a["dogru"],
+            "Yanlış": a["yanlis"],
+            "Boş": a["bos"],
+            "Doğru %": a["pct"],
+            "Zorluk": "🟢 Kolay" if a["pct"] >= 70 else ("🟡 Orta" if a["pct"] >= 40 else "🔴 Zor"),
+        } for a in analiz])
+        st.dataframe(df_analiz_ui, use_container_width=True, hide_index=True,
+                     column_config={
+                         "Doğru %": st.column_config.ProgressColumn(
+                             "Doğru %", min_value=0, max_value=100, format="%.1f%%"
+                         )
+                     })
+
+    # ── Önizleme Tablosu ─────────────────────────────────────────────────────
+    st.markdown('<div class="sec-head">📋 Önizleme Tablosu</div>', unsafe_allow_html=True)
+
+    def ogr_sort_key(r):
+        ogr = r["ogr_no"]
+        num = re.sub(r'[^0-9]', '', ogr)
+        return (ogr.startswith('C'), int(num) if num else 0)
+
+    sonuclar_sirali_ui = sorted(sonuclar, key=ogr_sort_key)
+
+    df_oniz = pd.DataFrame([{
+        "#":             idx,
         "Öğrenci No":    r["ogr_no"],
         "Ad Soyad":      r["ad_soyad"],
         "TC":            r["tc"],
         "Cep":           r["cep"] if r["cep"] else "—",
         "Toplam (100)":  r["toplam"],
-    } for r in sonuclar]).head(50)
+        "Durum":         "✓ Geçti" if r["toplam"] >= 50 else "✗ Kaldı",
+    } for idx, r in enumerate(sonuclar_sirali_ui, 1)])
 
     st.dataframe(
-        df_onizleme,
+        df_oniz,
         use_container_width=True,
         hide_index=True,
         column_config={
+            "#": st.column_config.NumberColumn("#", width="small"),
             "Toplam (100)": st.column_config.ProgressColumn(
-                "Toplam Puan (/100)", min_value=0, max_value=100, format="%.2f"
+                "Toplam Puan", min_value=0, max_value=100, format="%.2f"
             ),
+            "Durum": st.column_config.TextColumn("Durum", width="small"),
         }
     )
 
-    # — İndirme butonu ─────────────────────────────────────────────────────────
+    # ── İndirme ──────────────────────────────────────────────────────────────
     st.markdown("---")
-    excel_buf = excel_olustur(sonuclar, anahtar_input)
+    with st.spinner("Excel oluşturuluyor…"):
+        excel_buf = excel_olustur(sonuclar, anahtar_input)
 
+    cepli = sum(1 for r in sonuclar if r.get("cep"))
+    st.markdown(
+        f'<div class="ok-box">✅ Excel hazır · 6 sheet · {len(sonuclar)} öğrenci · '
+        f'{gecme} geçti · {cepli} cep numarası tespit edildi</div>',
+        unsafe_allow_html=True
+    )
     st.download_button(
-        label="⬇️  Excel İndir  (sonuc.xlsx)",
+        label="⬇️  Excel İndir  (.xlsx)",
         data=excel_buf,
-        file_name=yuklenen.name.rsplit(".", 1)[0] + ".xlsx",
+        file_name=yuklenen.name.rsplit(".", 1)[0] + "_sonuclar.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         use_container_width=False,
-    )
-    st.markdown(
-        f'<div class="ok-box">✅ Excel hazır — 5 sheet · {len(sonuclar)} öğrenci · Cep tespit edilen: {cepli}</div>',
-        unsafe_allow_html=True
     )
