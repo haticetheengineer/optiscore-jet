@@ -32,6 +32,13 @@ from reportlab.platypus import (
 )
 from reportlab.graphics.shapes import Drawing, Rect, String, Line, Group
 from reportlab.graphics import renderPDF
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+
+# ── Ek importlar ────────────────────────────────────────────────────────────
+import hashlib
+import urllib.request
+import os
 
 # ── Sayfa ayarları ──────────────────────────────────────────────────────────
 st.set_page_config(
@@ -319,8 +326,8 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     box-shadow: 0 4px 16px rgba(52,211,153,0.2) !important;
 }
 [data-testid="stDownloadButton"]:nth-of-type(2) > button {
-    background: rgba(239,68,68,0.1) !important;
-    border: 1px solid rgba(239,68,68,0.4) !important;
+    background: rgba(239,68,68,0.08) !important;
+    border: 1px solid rgba(239,68,68,0.35) !important;
     color: #ef4444 !important;
     border-radius: 9px !important;
     font-family: 'Inter', sans-serif !important;
@@ -328,7 +335,7 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     letter-spacing: -0.01em !important;
 }
 [data-testid="stDownloadButton"]:nth-of-type(2) > button:hover {
-    background: rgba(239,68,68,0.18) !important;
+    background: rgba(239,68,68,0.16) !important;
     box-shadow: 0 4px 16px rgba(239,68,68,0.2) !important;
 }
 .stTextInput > div > div > input {
@@ -355,6 +362,113 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 .dist-cnt { font-size: 0.73rem; color: var(--text3); width: 30px; }
 
 hr { border-color: var(--border) !important; }
+
+/* Login ekranı */
+.login-wrap {
+    max-width: 420px;
+    margin: 4rem auto;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 2.8rem 2.4rem;
+    position: relative;
+    overflow: hidden;
+}
+.login-wrap::before {
+    content: '';
+    position: absolute;
+    top: -80px; right: -80px;
+    width: 260px; height: 260px;
+    background: radial-gradient(circle, rgba(124,106,247,0.15) 0%, transparent 70%);
+    pointer-events: none;
+}
+.login-logo {
+    font-size: 2.8rem;
+    text-align: center;
+    margin-bottom: 0.5rem;
+}
+.login-title {
+    font-size: 1.3rem;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    color: var(--text);
+    text-align: center;
+    margin-bottom: 0.3rem;
+}
+.login-sub {
+    font-size: 0.82rem;
+    color: var(--text3);
+    text-align: center;
+    margin-bottom: 1.8rem;
+}
+.ders-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.3rem 1.5rem;
+    margin-bottom: 1.2rem;
+}
+.ders-card-title {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text3);
+    margin-bottom: 0.9rem;
+}
+.kilavuz-wrap {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 2rem;
+}
+.kilavuz-step {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1.4rem;
+    align-items: flex-start;
+}
+.kilavuz-num {
+    background: rgba(124,106,247,0.15);
+    border: 1px solid rgba(124,106,247,0.3);
+    color: #7c6af7;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    font-weight: 700;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.kilavuz-content {
+    flex: 1;
+}
+.kilavuz-content b {
+    color: var(--text);
+    display: block;
+    margin-bottom: 0.3rem;
+    font-size: 0.92rem;
+}
+.kilavuz-content p {
+    color: var(--text3);
+    font-size: 0.82rem;
+    line-height: 1.7;
+    margin: 0;
+}
+.kilavuz-code {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.7rem 1rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+    color: #7c6af7;
+    margin-top: 0.5rem;
+    line-height: 1.9;
+}
 
 /* Streamlit varsayılan arka planları sıfırla */
 [data-testid="stVerticalBlock"],
@@ -491,8 +605,33 @@ def soru_analizi_hesapla(sonuclar, anahtar):
     return analiz
 
 
-def pdf_olustur(sonuclar, anahtar, dosya_adi=""):
+def pdf_olustur(sonuclar, anahtar, dosya_adi="", ders_bilgisi=None, hoca_adi=""):
     """Analiz raporu PDF'i oluşturur."""
+
+    # ── TTF Font Kaydı (Türkçe karakter desteği) ─────────────────────────────
+    _registered = getattr(pdfmetrics, '_dv_registered', False)
+    if not _registered:
+        # Font dizini: önce sistem yolunu dene, sonra proje kökünü
+        import os as _os
+        _candidates = [
+            "/usr/share/fonts/truetype/dejavu",
+            "/usr/share/fonts/dejavu",
+            _os.path.join(_os.path.dirname(__file__), "fonts"),
+        ]
+        _FONT_DIR = next((d for d in _candidates
+                          if _os.path.exists(_os.path.join(d, "DejaVuSans.ttf"))), None)
+        if _FONT_DIR is None:
+            raise FileNotFoundError(
+                "DejaVuSans.ttf bulunamadı. Lütfen 'fonts/' klasörüne DejaVu Sans .ttf dosyalarını ekleyin."
+            )
+        pdfmetrics.registerFont(TTFont("DV",     f"{_FONT_DIR}/DejaVuSans.ttf"))
+        pdfmetrics.registerFont(TTFont("DV-B",   f"{_FONT_DIR}/DejaVuSans-Bold.ttf"))
+        pdfmetrics.registerFont(TTFont("DV-I",   f"{_FONT_DIR}/DejaVuSans-Oblique.ttf"))
+        pdfmetrics.registerFont(TTFont("DV-BI",  f"{_FONT_DIR}/DejaVuSans-BoldOblique.ttf"))
+        pdfmetrics.registerFont(TTFont("DV-Mono",f"{_FONT_DIR}/DejaVuSansMono.ttf"))
+        from reportlab.pdfbase.pdfmetrics import registerFontFamily
+        registerFontFamily("DV", normal="DV", bold="DV-B", italic="DV-I", boldItalic="DV-BI")
+        pdfmetrics._dv_registered = True
 
     # ── Renkler ────────────────────────────────────────────────────────────────
     C_PURPLE   = rl_colors.HexColor("#7c6af7")
@@ -532,16 +671,16 @@ def pdf_olustur(sonuclar, anahtar, dosya_adi=""):
     def ps(name, **kw):
         return ParagraphStyle(name, **kw)
 
-    s_title   = ps("title",   fontName="Helvetica-Bold",   fontSize=22, textColor=C_DARK,   spaceAfter=4,  leading=26)
-    s_sub     = ps("sub",     fontName="Helvetica",        fontSize=10, textColor=C_GREY,   spaceAfter=2)
-    s_credit  = ps("credit",  fontName="Helvetica-BoldOblique", fontSize=9, textColor=C_PURPLE, spaceAfter=0)
-    s_h2      = ps("h2",      fontName="Helvetica-Bold",   fontSize=13, textColor=C_DARK,   spaceBefore=18, spaceAfter=6)
-    s_h3      = ps("h3",      fontName="Helvetica-Bold",   fontSize=10, textColor=C_GREY,   spaceBefore=4,  spaceAfter=4)
-    s_body    = ps("body",    fontName="Helvetica",        fontSize=9,  textColor=C_DARK,   leading=14)
-    s_small   = ps("small",   fontName="Helvetica",        fontSize=8,  textColor=C_GREY)
-    s_tc      = ps("tc",      fontName="Helvetica",        fontSize=9,  textColor=C_DARK,   alignment=TA_CENTER)
-    s_tc_bold = ps("tcb",     fontName="Helvetica-Bold",   fontSize=9,  textColor=C_WHITE,  alignment=TA_CENTER)
-    s_tr      = ps("tr",      fontName="Helvetica",        fontSize=9,  textColor=C_DARK,   alignment=TA_RIGHT)
+    s_title   = ps("title",   fontName="DV-B",   fontSize=22, textColor=C_DARK,   spaceAfter=4,  leading=26)
+    s_sub     = ps("sub",     fontName="DV",        fontSize=10, textColor=C_GREY,   spaceAfter=2)
+    s_credit  = ps("credit",  fontName="DV-BI", fontSize=9, textColor=C_PURPLE, spaceAfter=0)
+    s_h2      = ps("h2",      fontName="DV-B",   fontSize=13, textColor=C_DARK,   spaceBefore=18, spaceAfter=6)
+    s_h3      = ps("h3",      fontName="DV-B",   fontSize=10, textColor=C_GREY,   spaceBefore=4,  spaceAfter=4)
+    s_body    = ps("body",    fontName="DV",        fontSize=9,  textColor=C_DARK,   leading=14)
+    s_small   = ps("small",   fontName="DV",        fontSize=8,  textColor=C_GREY)
+    s_tc      = ps("tc",      fontName="DV",        fontSize=9,  textColor=C_DARK,   alignment=TA_CENTER)
+    s_tc_bold = ps("tcb",     fontName="DV-B",   fontSize=9,  textColor=C_WHITE,  alignment=TA_CENTER)
+    s_tr      = ps("tr",      fontName="DV",        fontSize=9,  textColor=C_DARK,   alignment=TA_RIGHT)
 
     # ── Header/Footer ──────────────────────────────────────────────────────────
     PAGE_W, PAGE_H = A4
@@ -552,9 +691,10 @@ def pdf_olustur(sonuclar, anahtar, dosya_adi=""):
         canvas.setLineWidth(3)
         canvas.line(2*cm, PAGE_H - 1.2*cm, PAGE_W - 2*cm, PAGE_H - 1.2*cm)
         # Alt footer
-        canvas.setFont("Helvetica", 7.5)
+        canvas.setFont("DV", 7.5)
         canvas.setFillColor(C_GREY)
-        canvas.drawString(2*cm, 1.2*cm, "Optik Notlandirma Sistemi  |  Ogr. Gor. Hatice Tekis")
+        hoca_footer = hoca_adi if hoca_adi else "Optik Notlandirma Sistemi"
+        canvas.drawString(2*cm, 1.2*cm, f"Optik Notlandirma  |  {hoca_footer}")
         canvas.drawRightString(PAGE_W - 2*cm, 1.2*cm, f"Sayfa {doc.page}")
         canvas.restoreState()
 
@@ -563,7 +703,7 @@ def pdf_olustur(sonuclar, anahtar, dosya_adi=""):
         leftMargin=2*cm, rightMargin=2*cm,
         topMargin=2*cm, bottomMargin=2*cm,
         title="Optik Notlandirma Analiz Raporu",
-        author="Ogr. Gor. Hatice Tekis",
+        author=hoca_adi if hoca_adi else "Optik Notlandirma",
     )
 
     story = []
@@ -571,12 +711,35 @@ def pdf_olustur(sonuclar, anahtar, dosya_adi=""):
     # ══ 1. BAŞLIK SAYFASI ═════════════════════════════════════════════════════
     story.append(Spacer(1, 0.5*cm))
     story.append(Paragraph("Optik Notlandirma", s_title))
-    story.append(Paragraph("Analiz Raporu", ps("t2", fontName="Helvetica-Bold", fontSize=16,
+    story.append(Paragraph("Analiz Raporu", ps("t2", fontName="DV-B", fontSize=16,
                                                 textColor=C_PURPLE, spaceAfter=6)))
     if dosya_adi:
         story.append(Paragraph(f"Kaynak: {dosya_adi}", s_sub))
     story.append(Paragraph(f"Cevap Anahtari: <b>{anahtar}</b>  ({soru_sayisi} soru)", s_sub))
-    story.append(Paragraph("Ogr. Gor. Hatice Tekis", s_credit))
+    # Hoca ve ders bilgisi
+    if hoca_adi:
+        story.append(Paragraph(f"Hazirlayan: <b>{hoca_adi}</b>", s_credit))
+    if ders_bilgisi:
+        db = ders_bilgisi
+        story.append(Spacer(1, 0.3*cm))
+        ders_rows = []
+        if db.get("ders_adi"):    ders_rows.append([Paragraph("<b>Ders Adi</b>", s_body),    Paragraph(db["ders_adi"], s_body)])
+        if db.get("ders_kodu"):   ders_rows.append([Paragraph("<b>Ders Kodu</b>", s_body),   Paragraph(db["ders_kodu"], s_body)])
+        if db.get("bolum"):       ders_rows.append([Paragraph("<b>Bolum</b>", s_body),       Paragraph(db["bolum"], s_body)])
+        if db.get("donem"):       ders_rows.append([Paragraph("<b>Donem</b>", s_body),       Paragraph(db["donem"], s_body)])
+        if db.get("akademik_yil"):ders_rows.append([Paragraph("<b>Akademik Yil</b>", s_body),Paragraph(db["akademik_yil"], s_body)])
+        if ders_rows:
+            d_tw = PAGE_W - 4*cm
+            d_tbl = Table(ders_rows, colWidths=[d_tw*0.3, d_tw*0.7])
+            d_tbl.setStyle(TableStyle([
+                ("BACKGROUND", (0,0), (0,-1), C_GREY_L),
+                ("FONTNAME",   (0,0), (0,-1), "DV-B"),
+                ("GRID",       (0,0), (-1,-1), 0.4, C_BORDER),
+                ("TOPPADDING", (0,0), (-1,-1), 5),
+                ("BOTTOMPADDING",(0,0),(-1,-1), 5),
+                ("LEFTPADDING",(0,0),(-1,-1), 8),
+            ]))
+            story.append(d_tbl)
     story.append(HRFlowable(width="100%", thickness=1.5, color=C_PURPLE,
                              spaceAfter=16, spaceBefore=10))
 
@@ -596,16 +759,16 @@ def pdf_olustur(sonuclar, anahtar, dosya_adi=""):
     stat_rows = [
         [Paragraph("<b>Istatistik</b>", s_tc_bold), Paragraph("<b>Deger</b>", s_tc_bold),
          Paragraph("<b>Istatistik</b>", s_tc_bold), Paragraph("<b>Deger</b>", s_tc_bold)],
-        [Paragraph("Toplam Ogrenci",   s_body), Paragraph(f"<b>{n}</b>",              ps("vb", fontName="Helvetica-Bold", fontSize=11, textColor=C_PURPLE, alignment=TA_CENTER)),
-         Paragraph("Gecen (>=50)",     s_body), Paragraph(f"<b>{gecme_say}</b>",      ps("vb2",fontName="Helvetica-Bold", fontSize=11, textColor=C_GREEN, alignment=TA_CENTER))],
-        [Paragraph("Sinif Ortalamasi", s_body), Paragraph(f"<b>{ort:.2f}</b>",        ps("vb3", fontName="Helvetica-Bold", fontSize=11, textColor=C_PURPLE, alignment=TA_CENTER)),
-         Paragraph("Gecme Orani",      s_body), Paragraph(f"<b>%{gecme_pct}</b>",     ps("vb4", fontName="Helvetica-Bold", fontSize=11, textColor=C_GREEN, alignment=TA_CENTER))],
-        [Paragraph("Standart Sapma",   s_body), Paragraph(f"<b>{std:.2f}</b>",        ps("vb5", fontName="Helvetica-Bold", fontSize=11, textColor=C_SKY, alignment=TA_CENTER)),
-         Paragraph("Kalan",            s_body), Paragraph(f"<b>{n - gecme_say}</b>",  ps("vb6", fontName="Helvetica-Bold", fontSize=11, textColor=C_RED, alignment=TA_CENTER))],
-        [Paragraph("Medyan",           s_body), Paragraph(f"<b>{medyan:.2f}</b>",     ps("vb7", fontName="Helvetica-Bold", fontSize=11, textColor=C_DARK, alignment=TA_CENTER)),
-         Paragraph("En Yuksek",        s_body), Paragraph(f"<b>{en_yuksek:.2f}</b>",  ps("vb8", fontName="Helvetica-Bold", fontSize=11, textColor=C_GREEN, alignment=TA_CENTER))],
-        [Paragraph("Soru Sayisi",      s_body), Paragraph(f"<b>{soru_sayisi}</b>",    ps("vb9", fontName="Helvetica-Bold", fontSize=11, textColor=C_DARK, alignment=TA_CENTER)),
-         Paragraph("En Dusuk",         s_body), Paragraph(f"<b>{en_dusuk:.2f}</b>",   ps("vb10",fontName="Helvetica-Bold", fontSize=11, textColor=C_RED, alignment=TA_CENTER))],
+        [Paragraph("Toplam Ogrenci",   s_body), Paragraph(f"<b>{n}</b>",              ps("vb", fontName="DV-B", fontSize=11, textColor=C_PURPLE, alignment=TA_CENTER)),
+         Paragraph("Gecen (>=50)",     s_body), Paragraph(f"<b>{gecme_say}</b>",      ps("vb2",fontName="DV-B", fontSize=11, textColor=C_GREEN, alignment=TA_CENTER))],
+        [Paragraph("Sinif Ortalamasi", s_body), Paragraph(f"<b>{ort:.2f}</b>",        ps("vb3", fontName="DV-B", fontSize=11, textColor=C_PURPLE, alignment=TA_CENTER)),
+         Paragraph("Gecme Orani",      s_body), Paragraph(f"<b>%{gecme_pct}</b>",     ps("vb4", fontName="DV-B", fontSize=11, textColor=C_GREEN, alignment=TA_CENTER))],
+        [Paragraph("Standart Sapma",   s_body), Paragraph(f"<b>{std:.2f}</b>",        ps("vb5", fontName="DV-B", fontSize=11, textColor=C_SKY, alignment=TA_CENTER)),
+         Paragraph("Kalan",            s_body), Paragraph(f"<b>{n - gecme_say}</b>",  ps("vb6", fontName="DV-B", fontSize=11, textColor=C_RED, alignment=TA_CENTER))],
+        [Paragraph("Medyan",           s_body), Paragraph(f"<b>{medyan:.2f}</b>",     ps("vb7", fontName="DV-B", fontSize=11, textColor=C_DARK, alignment=TA_CENTER)),
+         Paragraph("En Yuksek",        s_body), Paragraph(f"<b>{en_yuksek:.2f}</b>",  ps("vb8", fontName="DV-B", fontSize=11, textColor=C_GREEN, alignment=TA_CENTER))],
+        [Paragraph("Soru Sayisi",      s_body), Paragraph(f"<b>{soru_sayisi}</b>",    ps("vb9", fontName="DV-B", fontSize=11, textColor=C_DARK, alignment=TA_CENTER)),
+         Paragraph("En Dusuk",         s_body), Paragraph(f"<b>{en_dusuk:.2f}</b>",   ps("vb10",fontName="DV-B", fontSize=11, textColor=C_RED, alignment=TA_CENTER))],
     ]
 
     col_w = (PAGE_W - 4*cm) / 4
@@ -613,7 +776,7 @@ def pdf_olustur(sonuclar, anahtar, dosya_adi=""):
     stat_tbl.setStyle(TableStyle([
         ("BACKGROUND",  (0,0), (-1,0),  C_DARK),
         ("TEXTCOLOR",   (0,0), (-1,0),  C_WHITE),
-        ("FONTNAME",    (0,0), (-1,0),  "Helvetica-Bold"),
+        ("FONTNAME",    (0,0), (-1,0),  "DV-B"),
         ("FONTSIZE",    (0,0), (-1,0),  9),
         ("ALIGN",       (0,0), (-1,-1), "CENTER"),
         ("VALIGN",      (0,0), (-1,-1), "MIDDLE"),
@@ -636,13 +799,13 @@ def pdf_olustur(sonuclar, anahtar, dosya_adi=""):
          Paragraph("<b>Sayi</b>",    s_tc_bold),
          Paragraph("<b>Oran</b>",    s_tc_bold),
          Paragraph("<b>Puan Esigi</b>", s_tc_bold)],
-        [Paragraph("Gecti", ps("gc", fontName="Helvetica-Bold", fontSize=10, textColor=C_GREEN, alignment=TA_CENTER)),
-         Paragraph(str(gecme_say), ps("gcv", fontName="Helvetica-Bold", fontSize=14, textColor=C_GREEN, alignment=TA_CENTER)),
-         Paragraph(f"%{gecme_pct}", ps("gcr", fontName="Helvetica-Bold", fontSize=12, textColor=C_GREEN, alignment=TA_CENTER)),
+        [Paragraph("Gecti", ps("gc", fontName="DV-B", fontSize=10, textColor=C_GREEN, alignment=TA_CENTER)),
+         Paragraph(str(gecme_say), ps("gcv", fontName="DV-B", fontSize=14, textColor=C_GREEN, alignment=TA_CENTER)),
+         Paragraph(f"%{gecme_pct}", ps("gcr", fontName="DV-B", fontSize=12, textColor=C_GREEN, alignment=TA_CENTER)),
          Paragraph(">= 50", s_tc)],
-        [Paragraph("Kaldi", ps("kl", fontName="Helvetica-Bold", fontSize=10, textColor=C_RED, alignment=TA_CENTER)),
-         Paragraph(str(n - gecme_say), ps("klv", fontName="Helvetica-Bold", fontSize=14, textColor=C_RED, alignment=TA_CENTER)),
-         Paragraph(f"%{round(100 - gecme_pct, 1)}", ps("klr", fontName="Helvetica-Bold", fontSize=12, textColor=C_RED, alignment=TA_CENTER)),
+        [Paragraph("Kaldi", ps("kl", fontName="DV-B", fontSize=10, textColor=C_RED, alignment=TA_CENTER)),
+         Paragraph(str(n - gecme_say), ps("klv", fontName="DV-B", fontSize=14, textColor=C_RED, alignment=TA_CENTER)),
+         Paragraph(f"%{round(100 - gecme_pct, 1)}", ps("klr", fontName="DV-B", fontSize=12, textColor=C_RED, alignment=TA_CENTER)),
          Paragraph("< 50", s_tc)],
     ]
     tw = PAGE_W - 4*cm
@@ -699,11 +862,11 @@ def pdf_olustur(sonuclar, anahtar, dosya_adi=""):
             lbl_x   = lbl_w + fill_w + 4
             drw.add(String(lbl_x, y + row_h * 0.22,
                            pct_str,
-                           fontName="Helvetica", fontSize=7.5,
+                           fontName="DV", fontSize=7.5,
                            fillColor=rl_colors.HexColor("#4a4770")))
 
         drw.add(String(0, y + row_h * 0.22, lbl,
-                       fontName="Helvetica", fontSize=8,
+                       fontName="DV", fontSize=8,
                        fillColor=rl_colors.HexColor("#6b6880")))
 
     story.append(drw)
@@ -713,7 +876,7 @@ def pdf_olustur(sonuclar, anahtar, dosya_adi=""):
     story.append(Paragraph("Soru Analizi", s_h2))
     story.append(Paragraph(
         "Dogru Yapma Orani:  Kolay >= %70  |  Orta %40-69  |  Zor < %40",
-        ps("leg", fontName="Helvetica", fontSize=8, textColor=C_GREY, spaceAfter=8)
+        ps("leg", fontName="DV", fontSize=8, textColor=C_GREY, spaceAfter=8)
     ))
 
     # Soru kartlarını tablo olarak düzenle (8 sütun)
@@ -741,18 +904,18 @@ def pdf_olustur(sonuclar, anahtar, dosya_adi=""):
 
         qa_rows.append([
             Paragraph(f"S{a['soru']}", s_tc),
-            Paragraph(f"<b>{a['anahtar']}</b>", ps("ans", fontName="Helvetica-Bold", fontSize=9, textColor=C_PURPLE, alignment=TA_CENTER)),
-            Paragraph(str(a["dogru"]),  ps("d", fontName="Helvetica-Bold", fontSize=9, textColor=C_GREEN, alignment=TA_CENTER)),
-            Paragraph(str(a["yanlis"]), ps("y", fontName="Helvetica-Bold", fontSize=9, textColor=C_RED,   alignment=TA_CENTER)),
-            Paragraph(str(a["bos"]),    ps("b", fontName="Helvetica",      fontSize=9, textColor=C_GREY,  alignment=TA_CENTER)),
-            Paragraph(f"{a['pct']:.1f}%", ps("p", fontName="Helvetica-Bold", fontSize=9, textColor=z_fg, alignment=TA_CENTER)),
-            Paragraph(zorluk_txt, ps(f"z{a['soru']}", fontName="Helvetica-Bold", fontSize=8.5, textColor=z_fg, alignment=TA_CENTER)),
-            Paragraph(bar_str,    ps("bar", fontName="Courier", fontSize=7, textColor=z_fg, alignment=TA_CENTER)),
+            Paragraph(f"<b>{a['anahtar']}</b>", ps("ans", fontName="DV-B", fontSize=9, textColor=C_PURPLE, alignment=TA_CENTER)),
+            Paragraph(str(a["dogru"]),  ps("d", fontName="DV-B", fontSize=9, textColor=C_GREEN, alignment=TA_CENTER)),
+            Paragraph(str(a["yanlis"]), ps("y", fontName="DV-B", fontSize=9, textColor=C_RED,   alignment=TA_CENTER)),
+            Paragraph(str(a["bos"]),    ps("b", fontName="DV",      fontSize=9, textColor=C_GREY,  alignment=TA_CENTER)),
+            Paragraph(f"{a['pct']:.1f}%", ps("p", fontName="DV-B", fontSize=9, textColor=z_fg, alignment=TA_CENTER)),
+            Paragraph(zorluk_txt, ps(f"z{a['soru']}", fontName="DV-B", fontSize=8.5, textColor=z_fg, alignment=TA_CENTER)),
+            Paragraph(bar_str,    ps("bar", fontName="DV-Mono", fontSize=7, textColor=z_fg, alignment=TA_CENTER)),
         ])
 
     tw = PAGE_W - 4*cm
-    qa_tbl = Table(qa_rows, colWidths=[tw*0.08, tw*0.08, tw*0.09, tw*0.09,
-                                        tw*0.08, tw*0.1,  tw*0.1,  tw*0.38])
+    qa_tbl = Table(qa_rows, colWidths=[tw*0.08, tw*0.10, tw*0.09, tw*0.09,
+                                        tw*0.07, tw*0.10, tw*0.10, tw*0.37])
     qa_style = [
         ("BACKGROUND",   (0,0), (-1,0),  C_DARK),
         ("GRID",         (0,0), (-1,-1), 0.4, C_BORDER),
@@ -760,6 +923,8 @@ def pdf_olustur(sonuclar, anahtar, dosya_adi=""):
         ("VALIGN",       (0,0), (-1,-1), "MIDDLE"),
         ("TOPPADDING",   (0,0), (-1,-1), 5),
         ("BOTTOMPADDING",(0,0), (-1,-1), 5),
+        ("FONTSIZE",     (0,0), (-1,0),  8.5),
+        ("NOSPLIT",      (0,0), (-1,0)),
     ]
     # Zorluk sütununa arka plan rengini satır satır uygula
     for row_idx, a in enumerate(analiz, start=1):
@@ -802,12 +967,12 @@ def pdf_olustur(sonuclar, anahtar, dosya_adi=""):
         durum_tx = "Gecti" if gecti else "Kaldi"
         row_bg   = C_WHITE if idx % 2 else C_ROW_ALT
         stu_rows.append([
-            Paragraph(str(idx), ps(f"rn{idx}", fontName="Helvetica", fontSize=8, textColor=C_PURPLE, alignment=TA_CENTER)),
-            Paragraph(r["ogr_no"],   ps(f"on{idx}", fontName="Helvetica-Bold", fontSize=8.5, textColor=C_DARK, alignment=TA_CENTER)),
-            Paragraph(r["ad_soyad"], ps(f"ad{idx}", fontName="Helvetica",      fontSize=8.5, textColor=C_DARK)),
-            Paragraph(f"<b>{r['toplam']:.2f}</b>", ps(f"tp{idx}", fontName="Helvetica-Bold", fontSize=9,
+            Paragraph(str(idx), ps(f"rn{idx}", fontName="DV", fontSize=8, textColor=C_PURPLE, alignment=TA_CENTER)),
+            Paragraph(r["ogr_no"],   ps(f"on{idx}", fontName="DV-B", fontSize=8.5, textColor=C_DARK, alignment=TA_CENTER)),
+            Paragraph(r["ad_soyad"], ps(f"ad{idx}", fontName="DV",      fontSize=8.5, textColor=C_DARK)),
+            Paragraph(f"<b>{r['toplam']:.2f}</b>", ps(f"tp{idx}", fontName="DV-B", fontSize=9,
                        textColor=durum_fg, alignment=TA_CENTER)),
-            Paragraph(durum_tx, ps(f"dt{idx}", fontName="Helvetica-Bold", fontSize=8,
+            Paragraph(durum_tx, ps(f"dt{idx}", fontName="DV-B", fontSize=8,
                       textColor=durum_fg, alignment=TA_CENTER)),
         ])
 
@@ -1206,7 +1371,7 @@ def _excel_stillendir(wb, sonuclar_sirali, anahtar, df_analiz):
                              color="7C6AF7" if ci == 0 else "1A1835",
                              bold=(ci == 0))
             if ci == 5:  # Ham Cevaplar
-                cell.font = Font(name="Courier New", size=9, color="4A4770")
+                cell.font = Font(name="DV-Mono", size=9, color="4A4770")
     auto_width(ws, max_w=50)
     ws.column_dimensions["A"].width = 5
 
@@ -1215,12 +1380,52 @@ def _excel_stillendir(wb, sonuclar_sirali, anahtar, df_analiz):
 # ARAYÜZ
 # ══════════════════════════════════════════════════════════════════════════════
 
-st.markdown("""
+# ── Login Sistemi ────────────────────────────────────────────────────────────
+KULLANICI_ADI = "tekis-jet"
+SIFRE_HASH    = hashlib.sha256("tekis2024".encode()).hexdigest()
+
+def sifre_dogrula(sifre):
+    return hashlib.sha256(sifre.encode()).hexdigest() == SIFRE_HASH
+
+if "giris_yapildi" not in st.session_state:
+    st.session_state.giris_yapildi = False
+if "hoca_adi" not in st.session_state:
+    st.session_state.hoca_adi = ""
+
+if not st.session_state.giris_yapildi:
+    st.markdown("""
+    <div class="login-wrap">
+        <div class="login-logo">📊</div>
+        <div class="login-title">Optik Notlandırma</div>
+        <div class="login-sub">Sisteme giriş yapın</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Formu ortala
+    _, col_mid, _ = st.columns([1, 2, 1])
+    with col_mid:
+        hoca_input   = st.text_input("Adınız Soyadınız", placeholder="Öğr. Gör. Ad Soyad")
+        kullanici    = st.text_input("Kullanıcı Adı", placeholder="kullanıcı adı")
+        sifre_input  = st.text_input("Şifre", type="password", placeholder="••••••••")
+        giris_btn    = st.button("Giriş Yap", use_container_width=True)
+
+        if giris_btn:
+            if kullanici == KULLANICI_ADI and sifre_dogrula(sifre_input):
+                st.session_state.giris_yapildi = True
+                st.session_state.hoca_adi = hoca_input.strip() or "Öğretim Görevlisi"
+                st.rerun()
+            else:
+                st.error("❌ Kullanıcı adı veya şifre hatalı.")
+    st.stop()
+
+# ── Giriş yapıldı — normal akış devam ──────────────────────────────────────
+
+st.markdown(f"""
 <div class="hero-wrap">
   <div class="hero-badge">v2.0 · Otomatik Notlandırma</div>
   <h1 class="hero-title">Optik <span>Notlandırma</span> Sistemi</h1>
   <p class="hero-sub">TXT → Excel dönüşüm · Soru analizi · Sınıf istatistikleri</p>
-  <div class="hero-credit">✦ &nbsp;<b>Öğr. Gör. Hatice Tekiş</b>&nbsp; tarafından geliştirilmiştir</div>
+  <div class="hero-credit">✦ &nbsp;<b>{st.session_state.hoca_adi}</b></div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -1252,6 +1457,14 @@ with st.sidebar:
     isle_btn = st.button("▶  Notlandır", use_container_width=True)
 
     st.markdown("---")
+    st.markdown('<p class="step-lbl" style="margin-top:0;">③ Ders Bilgileri</p>', unsafe_allow_html=True)
+    ders_adi       = st.text_input("Ders Adı",    placeholder="örn: Matematik I",   label_visibility="visible", key="ders_adi")
+    ders_kodu      = st.text_input("Ders Kodu",   placeholder="örn: MAT101",        label_visibility="visible", key="ders_kodu")
+    bolum          = st.text_input("Bölüm",       placeholder="örn: Bilgisayar Müh.",label_visibility="visible", key="bolum")
+    donem          = st.selectbox("Dönem", ["Güz", "Bahar", "Yaz"], key="donem")
+    akademik_yil   = st.text_input("Akademik Yıl", placeholder="2024-2025",         label_visibility="visible", key="akademik_yil")
+
+    st.markdown("---")
     st.markdown("""
     <div style="font-size:0.72rem;color:#4a4860;line-height:1.8;">
     <b style="color:#6b6880;">Desteklenen Formatlar</b><br>
@@ -1261,37 +1474,111 @@ with st.sidebar:
     ÇAP öğrencisi: OgrNo başında C
     </div>
     """, unsafe_allow_html=True)
+    st.markdown("---")
+    if st.button("🚪 Çıkış Yap", use_container_width=True):
+        st.session_state.giris_yapildi = False
+        st.session_state.hoca_adi = ""
+        st.rerun()
 
 # ── Ana içerik ───────────────────────────────────────────────────────────────
 if not isle_btn:
-    col1, col2 = st.columns(2)
-    with col1:
+    tab_format, tab_excel, tab_kilavuz = st.tabs(["📌 TXT Formatı", "📊 Excel Çıktısı", "📖 Kullanım Kılavuzu"])
+    with tab_format:
         st.markdown("""
-        <div style="background:var(--card-info-bg);border:1px solid var(--border);border-radius:14px;padding:1.7rem;">
-            <div style="font-size:0.7rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--text3);margin-bottom:0.9rem;">📌 Format Beklentisi</div>
-            <div style="font-family:'JetBrains Mono',monospace;font-size:0.78rem;color:var(--text3);line-height:2.1;">
-                <span style="color:#7c6af7;font-weight:700;">Format A</span> — TC+OgrNo+Cep (29-30 hane)<br>
-                <span style="color:var(--text3);">YILMAZ MEHMET</span> <span style="color:var(--text);">12345678901<b>12345678</b><span style="color:#34d399;">5554443322</span></span> CAED…<br><br>
-                <span style="color:#7c6af7;font-weight:700;">Format B</span> — TC+OgrNo (19 hane)<br>
-                <span style="color:var(--text3);">YILMAZ MEHMET</span> <span style="color:var(--text);">1234567890112345678</span> AAAD…<br><br>
-                <span style="color:#7c6af7;font-weight:700;">Format C</span> — Boşlukla ayrılmış<br>
-                <span style="color:var(--text3);">YILMAZ MEHMET</span> <span style="color:var(--text);">12345678901 12345678</span> ABCD…
-            </div>
+        <div class="kilavuz-wrap">
+        <div style="font-size:0.7rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--text3);margin-bottom:1rem;">Desteklenen TXT Formatları</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:0.8rem;color:var(--text3);line-height:2.3;">
+            <span style="color:#7c6af7;font-weight:700;">Format A</span> — TC + OgrNo + Cep bitişik (29-30 hane)<br>
+            <span style="background:var(--bg3);padding:0.1rem 0.5rem;border-radius:4px;color:var(--text);">YILMAZ MEHMET 12345678901<b style="color:#a89ef9;">12345678</b><b style="color:#34d399;">5554443322</b> CAED…</span><br><br>
+            <span style="color:#7c6af7;font-weight:700;">Format B</span> — TC + OgrNo bitişik, Cep yok (19 hane)<br>
+            <span style="background:var(--bg3);padding:0.1rem 0.5rem;border-radius:4px;color:var(--text);">YILMAZ MEHMET 1234567890112345678 AAAD…</span><br><br>
+            <span style="color:#7c6af7;font-weight:700;">Format C</span> — Boşlukla ayrılmış (klasik format)<br>
+            <span style="background:var(--bg3);padding:0.1rem 0.5rem;border-radius:4px;color:var(--text);">YILMAZ MEHMET 12345678901 12345678 ABCD…</span><br><br>
+            <span style="color:var(--text3);font-size:0.75rem;">ÇAP öğrencisi: Öğrenci numarası başında C harfi olabilir (örn: C12345678)</span>
+        </div>
         </div>
         """, unsafe_allow_html=True)
-    with col2:
+
+    with tab_excel:
         st.markdown("""
-        <div style="background:var(--card-info-bg);border:1px solid var(--border);border-radius:14px;padding:1.7rem;">
-            <div style="font-size:0.7rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--text3);margin-bottom:0.9rem;">📊 Excel Çıktısı (6 Sheet)</div>
-            <div style="font-size:0.82rem;color:var(--text3);line-height:2.3;">
-                <span style="color:#7c6af7;">●</span> <b style="color:#7c6af7;">Proliz Not Girişi</b> → OgrNo + soru puanları<br>
-                <span style="color:#7c6af7;">●</span> <b style="color:#7c6af7;">Detaylı Liste</b> → TC + Cep + Toplam + Sorular<br>
-                <span style="color:#34d399;">●</span> <b style="color:#34d399;">Özet</b> → Hızlı genel bakış<br>
-                <span style="color:#f59e0b;">●</span> <b style="color:#f59e0b;">Soru Analizi</b> → Doğru oranı + zorluk<br>
-                <span style="color:#f59e0b;">●</span> <b style="color:#f59e0b;">İstatistik</b> → Ort · Std · Min · Max<br>
-                <span style="color:var(--text3);">●</span> <b style="color:var(--text2);">Ham TXT</b> → Satır ham cevapları<br><br>
-                <span style="color:#34d399;">↑</span> Tüm listeler öğrenci numarasına göre sıralı
+        <div class="kilavuz-wrap">
+        <div style="font-size:0.7rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--text3);margin-bottom:1rem;">Excel Çıktısı — 6 Sheet</div>
+        <div style="font-size:0.85rem;color:var(--text3);line-height:2.5;">
+            <span style="color:#7c6af7;font-size:1rem;">①</span> <b style="color:#7c6af7;">Proliz Not Girişi</b> — Öğrenci No + her soru puanı (Proliz sistemine yüklenebilir format)<br>
+            <span style="color:#7c6af7;font-size:1rem;">②</span> <b style="color:#7c6af7;">Detaylı Liste</b> — TC · Cep · Toplam Puan · Başarı Durumu · Tüm soru puanları<br>
+            <span style="color:#34d399;font-size:1rem;">③</span> <b style="color:#34d399;">Özet</b> — Ad Soyad · TC · Toplam · Geçti/Kaldı hızlı bakış<br>
+            <span style="color:#f59e0b;font-size:1rem;">④</span> <b style="color:#f59e0b;">Soru Analizi</b> — Doğru oranı · Zorluk seviyesi · Renk kodlu<br>
+            <span style="color:#f59e0b;font-size:1rem;">⑤</span> <b style="color:#f59e0b;">İstatistik</b> — Ortalama · Std. Sapma · Medyan · Min/Max · Cevap Anahtarı<br>
+            <span style="color:var(--text3);font-size:1rem;">⑥</span> <b style="color:var(--text2);">Ham TXT</b> — Her satırın ham cevap dizisi (hata ayıklama için)<br><br>
+            <span style="color:#34d399;">↑</span> Tüm öğrenci listeleri öğrenci numarasına göre otomatik sıralanır
+        </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with tab_kilavuz:
+        st.markdown("""
+        <div class="kilavuz-wrap">
+        <div style="font-size:0.7rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--text3);margin-bottom:1.2rem;">Adım Adım Kullanım Kılavuzu</div>
+
+        <div class="kilavuz-step">
+            <div class="kilavuz-num">1</div>
+            <div class="kilavuz-content">
+                <b>Cevap Anahtarını Girin</b>
+                <p>Sol paneldeki "Cevap Anahtarı" alanına sınav cevaplarını büyük harfle girin.<br>
+                Örnek: ABCDABCDABCD (boşluksuz, sadece A-E arası harfler)</p>
+                <div class="kilavuz-code">örn: ABCDEABCDEABCDE → 15 soruluk sınav</div>
             </div>
+        </div>
+
+        <div class="kilavuz-step">
+            <div class="kilavuz-num">2</div>
+            <div class="kilavuz-content">
+                <b>TXT Dosyasını Yükleyin</b>
+                <p>Optik okuyucudan alınan .txt uzantılı dosyayı sol panelden yükleyin.<br>
+                UTF-8, CP1254 (Türkçe Windows) ve Latin-1 encoding otomatik algılanır.</p>
+            </div>
+        </div>
+
+        <div class="kilavuz-step">
+            <div class="kilavuz-num">3</div>
+            <div class="kilavuz-content">
+                <b>Ders Bilgilerini Doldurun</b>
+                <p>Sol paneldeki ders bilgileri alanını doldurun. Bu bilgiler PDF rapora otomatik eklenir.<br>
+                Ders adı, kodu, bölüm, dönem ve akademik yıl zorunlu değildir.</p>
+            </div>
+        </div>
+
+        <div class="kilavuz-step">
+            <div class="kilavuz-num">4</div>
+            <div class="kilavuz-content">
+                <b>Notlandır Butonuna Tıklayın</b>
+                <p>▶ Notlandır butonuna tıkladığınızda sistem otomatik olarak:<br>
+                Her öğrencinin cevaplarını analiz eder, doğru/yanlış/boş sayar,<br>
+                100 üzerinden puanlar (100 ÷ soru sayısı × doğru sayısı).</p>
+            </div>
+        </div>
+
+        <div class="kilavuz-step">
+            <div class="kilavuz-num">5</div>
+            <div class="kilavuz-content">
+                <b>Sonuçları İndirin</b>
+                <p>İşlem tamamlandığında iki seçenek sunulur:<br>
+                <b style="color:#34d399;">Excel (.xlsx)</b> — 6 sayfalık detaylı çalışma kitabı<br>
+                <b style="color:#f87171;">PDF (.pdf)</b> — Yazdırılabilir analiz raporu</p>
+            </div>
+        </div>
+
+        <div class="kilavuz-step">
+            <div class="kilavuz-num">!</div>
+            <div class="kilavuz-content">
+                <b>Sık Karşılaşılan Sorunlar</b>
+                <p>• <b>Cevap boş görünüyor:</b> TXT dosyası doğru formatta değil, Format sekmesine bakın.<br>
+                • <b>Türkçe karakter sorunu:</b> Dosyayı Windows CP1254 ile kaydedin.<br>
+                • <b>Cep numarası cevaplara karışıyor:</b> Sistem 19+ haneli bloklarda cep no'yu otomatik atar.<br>
+                • <b>ÇAP öğrencisi görünmüyor:</b> Öğrenci no'sunun C ile başladığını kontrol edin.</p>
+            </div>
+        </div>
+
         </div>
         """, unsafe_allow_html=True)
 
@@ -1470,7 +1757,11 @@ else:
         use_container_width=True,
         hide_index=True,
         column_config={
-            "#": st.column_config.NumberColumn("#", width="small"),
+            "#":          st.column_config.NumberColumn("#",         width="small"),
+            "Öğrenci No": st.column_config.TextColumn("Öğrenci No", width="medium"),
+            "Ad Soyad":   st.column_config.TextColumn("Ad Soyad",   width="large"),
+            "TC":         st.column_config.TextColumn("TC No",       width="medium"),
+            "Cep":        st.column_config.TextColumn("Cep Tel",     width="medium"),
             "Toplam (100)": st.column_config.ProgressColumn(
                 "Toplam Puan", min_value=0, max_value=100, format="%.2f"
             ),
@@ -1480,16 +1771,34 @@ else:
 
     # ── İndirme ──────────────────────────────────────────────────────────────
     st.markdown("---")
-    with st.spinner("Excel oluşturuluyor…"):
+
+    # Her iki dosyayı butonlar render edilmeden ÖNCE oluştur.
+    # Böylece download_button tıklanması sayfayı yeniden çizmez ve
+    # diğer buton kaybolmaz.
+    with st.spinner("Excel ve PDF hazırlanıyor…"):
         excel_buf = excel_olustur(sonuclar, anahtar_input)
+        ders_bilgisi = {
+            "ders_adi":     st.session_state.get("ders_adi", ""),
+            "ders_kodu":    st.session_state.get("ders_kodu", ""),
+            "bolum":        st.session_state.get("bolum", ""),
+            "donem":        st.session_state.get("donem", ""),
+            "akademik_yil": st.session_state.get("akademik_yil", ""),
+        }
+        pdf_buf = pdf_olustur(
+            sonuclar, anahtar_input,
+            dosya_adi=yuklenen.name.rsplit(".", 1)[0],
+            ders_bilgisi=ders_bilgisi,
+            hoca_adi=st.session_state.get("hoca_adi", ""),
+        )
 
     cepli = sum(1 for r in sonuclar if r.get("cep"))
     st.markdown(
-        f'<div class="ok-box">✅ Excel hazır · 6 sheet · {len(sonuclar)} öğrenci · '
+        f'<div class="ok-box">✅ Hazır · 6 sheet · {len(sonuclar)} öğrenci · '
         f'{gecme} geçti · {cepli} cep numarası tespit edildi</div>',
         unsafe_allow_html=True
     )
-    col_dl1, col_dl2, col_dl3 = st.columns([2, 2, 4])
+
+    col_dl1, col_dl2, _ = st.columns([2, 2, 3])
     with col_dl1:
         st.download_button(
             label="⬇️  Excel İndir  (.xlsx)",
@@ -1499,11 +1808,6 @@ else:
             use_container_width=True,
         )
     with col_dl2:
-        with st.spinner("PDF hazırlanıyor…"):
-            pdf_buf = pdf_olustur(
-                sonuclar, anahtar_input,
-                dosya_adi=yuklenen.name.rsplit(".", 1)[0]
-            )
         st.download_button(
             label="⬇️  PDF İndir  (.pdf)",
             data=pdf_buf,
